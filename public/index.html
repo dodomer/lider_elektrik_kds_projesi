@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lider Elektrik – Depo Karar Destek Sistemi</title>
+    
+    <!-- Google Fonts - Distinctive typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <button class="logo" id="logo-home-btn" type="button" title="Ana Ekrana Dön">
+                <span class="logo-icon">⚡</span>
+                <div class="logo-text">
+                    <h1>Lider Elektrik</h1>
+                    <span class="logo-subtitle">Karar Destek Sistemi</span>
+                </div>
+            </button>
+            <nav class="header-nav">
+                <button class="header-link" id="btn-product-analytics">
+                    <span class="header-link-icon">📊</span>
+                    Ürün Analizleri
+                </button>
+                <button class="header-link" id="btn-all-products">
+                    <span class="header-link-icon">📋</span>
+                    Tüm Ürünler
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        
+        <!-- ==================== -->
+        <!-- OVERVIEW SECTION (Default View) -->
+        <!-- ==================== -->
+        <div id="overview-section">
+            <!-- Hero Section with Main Action -->
+            <section class="hero-section">
+                <div class="hero-text">
+                    <h2>Depo Kararınızı Veriye Dayalı Alın</h2>
+                    <p>Mağaza doluluk oranı, satış trendleri ve depo maliyetlerini analiz ederek en uygun kararı öneririz.</p>
+                </div>
+                <button class="btn-primary" id="run-analysis-btn">
+                    <span class="btn-icon">🔍</span>
+                    Analiz Sayfası
+                </button>
+            </section>
+
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid dashboard-grid-utilization">
+                
+                <!-- Store Utilization Card -->
+                <div class="card card-utilization card-utilization-main" id="store-utilization-card">
+                    <div class="card-header">
+                        <span class="card-icon">🏪</span>
+                        <h3>Mağaza Doluluk Durumu</h3>
+                        <span class="help-icon help-icon-header" id="db-help-icon" tabindex="0">?
+                            <span class="tooltip tooltip-wide">Depo Birimi (DB), ürünlerin kapladığı fiziksel alanı temsil eden standart birimdir. Mağaza doluluk oranı, stokların toplam DB değerinin mağazanın kullanılabilir DB kapasitesine bölünmesiyle hesaplanır.</span>
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <!-- Loading state -->
+                        <div class="utilization-loading" id="utilization-loading">
+                            <p>Doluluk verileri yükleniyor...</p>
+                        </div>
+                        <!-- Utilization display -->
+                        <div class="utilization-display hidden" id="utilization-display">
+                            <div class="utilization-circle">
+                                <svg viewBox="0 0 100 100">
+                                    <circle class="circle-bg" cx="50" cy="50" r="42"></circle>
+                                    <circle class="circle-progress" id="utilization-circle-progress" cx="50" cy="50" r="42" 
+                                            stroke-dasharray="264" stroke-dashoffset="264"></circle>
+                                </svg>
+                                <div class="utilization-value">
+                                    <span class="value" id="utilization-percent">0</span>
+                                    <span class="unit">%</span>
+                                </div>
+                            </div>
+                            <div class="utilization-details">
+                                <div class="detail-row">
+                                    <span class="label">Kullanılan Alan</span>
+                                    <span class="value" id="utilization-used">– DB</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="label">Toplam Kapasite</span>
+                                    <span class="value" id="utilization-capacity">– DB</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="label">Boş Alan</span>
+                                    <span class="value" id="utilization-free">– DB</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Helper text explaining the metric -->
+                        <p class="utilization-helper-text hidden" id="utilization-helper-text">
+                            Doluluk oranı, toplam stok hacminin mağazanın kullanılabilir kapasitesine DB (Depo Birimi) cinsinden oranıdır.
+                        </p>
+                        <!-- Warning (shown when utilization is high) -->
+                        <div class="utilization-warning hidden" id="utilization-warning">
+                            <span class="warning-icon">⚠️</span>
+                            <span id="utilization-warning-text">Doluluk oranı yüksek. Depo ihtiyacı değerlendirilmeli.</span>
+                        </div>
+                        <!-- No data state -->
+                        <div class="utilization-no-data hidden" id="utilization-no-data">
+                            <div class="placeholder-icon">📊</div>
+                            <p>Doluluk verisi hesaplanamadı. Stok ve kapasite bilgilerini kontrol edin.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Depo Decision Card -->
+                <div class="card card-depo-decision" id="depo-decision-card">
+                    <div class="card-header">
+                        <span class="card-icon">🏭</span>
+                        <h3>Depo Karar Önerisi</h3>
+                    </div>
+                    <div class="card-body depo-decision-body">
+                        <span class="depo-decision-label">KDS Önerisi</span>
+                        <div class="depo-decision-status">
+                            <span class="depo-decision-badge" id="depo-decision-badge">-</span>
+                            <div class="depo-decision-text" id="depo-decision-text">Karar hesaplanıyor...</div>
+                        </div>
+                        <div class="depo-decision-metrics">
+                            <div class="metric-row">
+                                <span class="metric-label">Mevcut doluluk oranı</span>
+                                <span class="metric-value" id="metric-current-util">- %</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Son 6 ay ortalama doluluk</span>
+                                <span class="metric-value" id="metric-average-6m">- %</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">3 ay sonraki tahmini doluluk</span>
+                                <span class="metric-value" id="metric-forecast-3m">- %</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Tahmini ek depo maliyeti (aylık)</span>
+                                <span class="metric-value" id="metric-extra-cost">~45.000 TL</span>
+                            </div>
+                        </div>
+                        <p class="depo-decision-summary" id="depo-decision-summary">
+                            Doluluk ve satış trendlerine göre karar hesaplanıyor...
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Inflation & Stock Strategy Section -->
+            <section class="inflation-section" id="inflation-section">
+                <h2>Enflasyon ve Stok Stratejisi</h2>
+                <div class="inflation-grid">
+                    <!-- TÜİK Inflation Summary -->
+                    <div class="card card-inflation">
+                        <div class="card-header">
+                            <span class="card-icon">📊</span>
+                            <h3>TÜİK Resmi Enflasyon Oranı</h3>
+                        </div>
+                        <div class="card-body inflation-summary">
+                            <div class="inflation-row">
+                                <span class="label">Yıllık Enflasyon:</span>
+                                <span class="value"><span id="annualInflationValue">- %</span></span>
+                            </div>
+                            <div class="inflation-row">
+                                <span class="label">Aylık Enflasyon:</span>
+                                <span class="value"><span id="monthlyInflationValue">- %</span></span>
+                            </div>
+                            <p class="inflation-caption">Kaynak: TÜİK</p>
+                            <div class="inflation-trend">
+                                <div class="inflation-trend-chart" aria-hidden="true">
+                                    <canvas id="inflationSparkline" height="80"></canvas>
+                                </div>
+                                <p class="inflation-trend-note">
+                                    Son 12 ayda enflasyon yukarı yönlü seyretti ve stok stratejisi hesaplamalarında referans gösterilmektedir.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Inflation Calculator -->
+                    <div class="card card-inflation">
+                        <div class="card-header">
+                            <span class="card-icon">🧮</span>
+                            <h3>Enflasyon Hesaplama Aracı</h3>
+                        </div>
+                        <div class="card-body inflation-calculator">
+                            <div class="inflation-table">
+                                <div class="inflation-table-header">
+                                    <span>Ürün Adı</span>
+                                    <span>Önceki Alış Fiyatı</span>
+                                    <span>Yeni Alış Fiyatı</span>
+                                </div>
+                                <div class="inflation-table-row inflation-calc-row">
+                                    <input type="text" class="inflation-input-name" value="E27 Büyük Ampul" aria-label="Ürün Adı">
+                                    <input type="number" class="inflation-input-prev" step="0.01" min="0" placeholder="0.00" aria-label="Önceki Alış Fiyatı">
+                                    <input type="number" class="inflation-input-new" step="0.01" min="0" placeholder="0.00" aria-label="Yeni Alış Fiyatı">
+                                </div>
+                                <div class="inflation-table-row inflation-calc-row">
+                                    <input type="text" class="inflation-input-name" value="Uzatma Kablolu Priz" aria-label="Ürün Adı">
+                                    <input type="number" class="inflation-input-prev" step="0.01" min="0" placeholder="0.00" aria-label="Önceki Alış Fiyatı">
+                                    <input type="number" class="inflation-input-new" step="0.01" min="0" placeholder="0.00" aria-label="Yeni Alış Fiyatı">
+                                </div>
+                                <div class="inflation-table-row inflation-calc-row">
+                                    <input type="text" class="inflation-input-name" value="TV Kumandası" aria-label="Ürün Adı">
+                                    <input type="number" class="inflation-input-prev" step="0.01" min="0" placeholder="0.00" aria-label="Önceki Alış Fiyatı">
+                                    <input type="number" class="inflation-input-new" step="0.01" min="0" placeholder="0.00" aria-label="Yeni Alış Fiyatı">
+                                </div>
+                                <div class="inflation-table-row inflation-calc-row">
+                                    <input type="text" class="inflation-input-name" value="Musluk Bataryası" aria-label="Ürün Adı">
+                                    <input type="number" class="inflation-input-prev" step="0.01" min="0" placeholder="0.00" aria-label="Önceki Alış Fiyatı">
+                                    <input type="number" class="inflation-input-new" step="0.01" min="0" placeholder="0.00" aria-label="Yeni Alış Fiyatı">
+                                </div>
+                                <div class="inflation-table-row inflation-calc-row">
+                                    <input type="text" class="inflation-input-name" value="Dekoratif Armatür" aria-label="Ürün Adı">
+                                    <input type="number" class="inflation-input-prev" step="0.01" min="0" placeholder="0.00" aria-label="Önceki Alış Fiyatı">
+                                    <input type="number" class="inflation-input-new" step="0.01" min="0" placeholder="0.00" aria-label="Yeni Alış Fiyatı">
+                                </div>
+                            </div>
+                            <button type="button" class="btn-primary inflation-calc-btn" id="btn-calc-inflation">Enflasyonu Hesapla</button>
+                            <p class="inflation-result">Hesaplanan enflasyon: <span id="calc-inflation-value">-</span> %</p>
+                            <p id="stock-decision-message" class="inflation-decision-message"></p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- ==================== -->
+        <!-- SALES DETAILS SECTION (Hidden by Default) -->
+        <!-- ==================== -->
+        <div id="sales-details-section" class="hidden">
+            <!-- Section Header -->
+            <section class="section-header">
+                <div class="section-header-left">
+                    <h2>📊 Aylık Satış Analizi - Detaylar</h2>
+                </div>
+                <div class="section-header-right">
+                    <select id="sales-details-month-select" class="month-select month-select-large">
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
+                    <button class="btn-secondary" id="back-to-overview-from-sales-details-btn">
+                        <span class="btn-icon">←</span>
+                        Ana Ekrana Dön
+                    </button>
+                </div>
+            </section>
+
+            <!-- Sales Details Content -->
+            <div class="sales-details-content">
+                <!-- Main Chart Card -->
+                <div class="card card-chart card-visible">
+                    <div class="card-header card-header-chart">
+                        <div class="card-header-left">
+                            <span class="card-icon">📈</span>
+                            <h3>Satış Grafiği</h3>
+                            <div class="chart-mode-toggle">
+                                <button type="button" class="chart-mode-btn active" id="chart-mode-revenue" data-mode="revenue">
+                                    En çok ciro yapan 10 ürün
+                                </button>
+                                <span class="chart-mode-separator">|</span>
+                                <button type="button" class="chart-mode-btn" id="chart-mode-quantity" data-mode="quantity">
+                                    En çok satılan 10 ürün
+                                </button>
+                            </div>
+                        </div>
+                        <div class="monthly-total-ciro" id="monthly-total-ciro">
+                            <span class="ciro-label">Aylık Toplam Ciro</span>
+                            <span class="ciro-value" id="monthly-ciro-value">
+                                <span class="ciro-loading">Yükleniyor...</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container-large" id="sales-chart-container">
+                            <!-- Loading state -->
+                            <div class="chart-loading" id="sales-chart-loading">
+                                <p>Grafik yükleniyor...</p>
+                            </div>
+                            <!-- No data state -->
+                            <p class="chart-no-data hidden" id="sales-chart-no-data">
+                                Bu ay için grafik verisi bulunmamaktadır.
+                            </p>
+                            <!-- Chart canvas -->
+                            <canvas id="sales-revenue-chart" class="hidden"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sales Insights Card -->
+                <div class="card card-stats card-visible">
+                    <div class="card-header">
+                        <span class="card-icon">📋</span>
+                        <h3>Özet İstatistikler</h3>
+                        <span class="card-header-subtitle">Son 6 aylık satış trendi analizi</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="sales-insights-container">
+                            <!-- Loading state -->
+                            <div class="insights-loading" id="insights-loading">
+                                <p>Satış verileri analiz ediliyor...</p>
+                            </div>
+                            <!-- Insights content -->
+                            <div class="insights-content hidden" id="insights-content">
+                                <!-- Will be populated by JavaScript -->
+                            </div>
+                            <!-- No data state -->
+                            <p class="insights-no-data hidden" id="insights-no-data">
+                                Analiz için yeterli veri bulunmamaktadır.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Decision Support Card -->
+                <div class="card card-ai card-visible">
+                    <div class="card-header">
+                        <span class="card-icon">🤖</span>
+                        <h3>Yapay Zeka Karar Önerileri</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="ai-advice-container">
+                            <!-- Initial state with explanation -->
+                            <div id="ai-advice-initial">
+                                <p class="ai-explanation">
+                                    Seçili aya ait satış trendlerine göre yapay zekadan aksiyon önerileri almak için aşağıdaki butona tıklayın.
+                                </p>
+                                <button type="button" class="btn-primary btn-ai-advice" id="btn-get-ai-advice">
+                                    <span class="btn-icon">✨</span>
+                                    Öneri Al
+                                </button>
+                            </div>
+                            <!-- Loading state -->
+                            <div id="ai-advice-loading" class="hidden">
+                                <div class="ai-loading-spinner">
+                                    <span class="spinner"></span>
+                                    <p>Öneriler hazırlanıyor...</p>
+                                </div>
+                            </div>
+                            <!-- Error state -->
+                            <div id="ai-advice-error" class="hidden">
+                                <p class="ai-error-message"></p>
+                                <button type="button" class="btn-secondary btn-retry" id="btn-retry-ai-advice">
+                                    Tekrar Dene
+                                </button>
+                            </div>
+                            <!-- Success state with advice -->
+                            <div id="ai-advice-result" class="hidden">
+                                <p class="ai-advice-subtitle">Yapay zekanın önerdiği aksiyonlar:</p>
+                                <div class="ai-advice-content" id="ai-advice-content">
+                                    <!-- Will be populated by JavaScript -->
+                                </div>
+                                <button type="button" class="btn-secondary btn-refresh-advice" id="btn-refresh-ai-advice">
+                                    <span class="btn-icon">🔄</span>
+                                    Yeniden Oluştur
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== -->
+        <!-- PRODUCTS SECTION (Hidden by Default) -->
+        <!-- ==================== -->
+        <div id="products-section" class="hidden">
+            <!-- Section Header -->
+            <section class="section-header">
+                <h2>📋 Tüm Ürünler</h2>
+                <div class="section-header-actions">
+                    <button class="btn-primary" id="btn-add-product">
+                        <span class="btn-icon">➕</span>
+                        Yeni Ürün Ekle
+                    </button>
+                    <button class="btn-secondary" id="back-to-overview-from-products-btn">
+                        <span class="btn-icon">←</span>
+                        Ana Ekrana Dön
+                    </button>
+                </div>
+            </section>
+
+            <!-- Products Content -->
+            <div class="products-content">
+                <div class="card card-all-products card-visible">
+                    <div class="card-header">
+                        <span class="card-icon">📋</span>
+                        <div class="card-header-content">
+                            <h3>Tüm Ürünler</h3>
+                            <p class="card-subtitle" id="products-count">Ürünler yükleniyor...</p>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Products Table (shown directly) -->
+                        <div id="products-table-container" class="table-container">
+                            <table class="data-table" id="products-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ürün Adı</th>
+                                        <th>Kategori</th>
+                                        <th>Birim Fiyat</th>
+                                        <th>Hacim (DB)</th>
+                                        <th class="th-actions">Düzenleme</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="products-table-body">
+                                    <!-- Products will be loaded dynamically from API -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="table-note">* Hacim değerleri DB (Depo Birimi) cinsinden gösterilmektedir.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== -->
+        <!-- ANALYSIS SECTION (Hidden by Default) -->
+        <!-- ==================== -->
+        <div id="analysis-section" class="hidden">
+            <!-- Section Header -->
+            <section class="section-header">
+                <h2>📊 Analiz Sonuçları (TEST)</h2>
+                <button class="btn-secondary" id="back-to-overview-btn">
+                    <span class="btn-icon">←</span>
+                    Ana Ekrana Dön
+                </button>
+            </section>
+
+            <!-- Analysis Content -->
+            <div class="analysis-content">
+                <section class="analysis-map-section">
+                  <h2 class="section-title">İzmir Depo Haritası</h2>
+                  <p class="section-subtitle">
+                    Veritabanındaki depoları İzmir haritası üzerinde görsel olarak görüntüler.
+                  </p>
+                  <div id="depo-map"></div>
+                </section>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <p>© 2025 Lider Elektrik – Karar Destek Sistemi v1.0</p>
+        </div>
+    </footer>
+
+    <!-- Add Product Modal -->
+    <div id="add-product-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>➕ Yeni Ürün Ekle</h3>
+                <button class="modal-close-btn" id="modal-close-btn" type="button">&times;</button>
+            </div>
+            <form id="add-product-form" class="modal-body">
+                <!-- Product Name -->
+                <div class="form-group">
+                    <label for="product-name">Ürün Adı <span class="required">*</span></label>
+                    <input type="text" id="product-name" name="ad" required placeholder="Ürün adını girin">
+                </div>
+                
+                <!-- Category -->
+                <div class="form-group">
+                    <label for="product-category">Kategori <span class="required">*</span></label>
+                    <select id="product-category" name="kategori_id" required>
+                        <option value="">Kategori seçin...</option>
+                        <!-- Options will be loaded from API -->
+                    </select>
+                    <div id="category-error-message" class="form-hint form-error-inline hidden">Kategoriler yüklenemedi.</div>
+                </div>
+                
+                <!-- Depo Birimi (DB) -->
+                <div class="form-group">
+                    <label for="product-hacim">
+                        Depo Birimi (DB) <span class="required">*</span>
+                        <span class="help-icon" id="hacim-help-icon" tabindex="0">?
+                            <span class="tooltip">Depo Birimi (DB), ürünün depoda kapladığı hacmi ifade eden standart bir birimdir. Stok hacmini ve depo kapasitesini karşılaştırmak için kullanılır.</span>
+                        </span>
+                    </label>
+                    <input type="number" id="product-hacim" name="hacim_db" step="0.01" min="0" value="0.10" required placeholder="0.00">
+                    <span class="form-hint">Kategoriye göre otomatik ayarlanır, düzenlenebilir</span>
+                    
+                    <!-- Example DB Values Button -->
+                    <button type="button" class="btn-info-toggle" id="btn-toggle-db-examples">
+                        <span class="toggle-icon">▶</span> Örnek Depo Birimleri
+                    </button>
+                    
+                    <!-- Collapsible Example Panel -->
+                    <div id="db-examples-panel" class="info-panel hidden">
+                        <p class="info-panel-title">Örnek Ürünler ve DB Değerleri:</p>
+                        <ul class="db-examples-list">
+                            <li><span class="example-product">E27 Büyük Ampul</span> <span class="example-value">→ 0.20 DB</span></li>
+                            <li><span class="example-product">E27 Küçük Ampul</span> <span class="example-value">→ 0.12 DB</span></li>
+                            <li><span class="example-product">Uzatma Kablolu Priz</span> <span class="example-value">→ 0.32 DB</span></li>
+                            <li><span class="example-product">TV Kumandası</span> <span class="example-value">→ 0.08 DB</span></li>
+                            <li><span class="example-product">Uydu Kumandası</span> <span class="example-value">→ 0.08 DB</span></li>
+                            <li><span class="example-product">Anahtar Priz Tekli</span> <span class="example-value">→ 0.12 DB</span></li>
+                            <li><span class="example-product">Anahtar Priz Çiftli</span> <span class="example-value">→ 0.16 DB</span></li>
+                            <li><span class="example-product">Anahtar Priz Üçlü</span> <span class="example-value">→ 0.20 DB</span></li>
+                            <li><span class="example-product">Anahtar Kopyalama Standart</span> <span class="example-value">→ 0.02 DB</span></li>
+                            <li><span class="example-product">Anahtar Kopyalama Güvenlikli</span> <span class="example-value">→ 0.02 DB</span></li>
+                            <li><span class="example-product">Anahtar Kopyalama Özel</span> <span class="example-value">→ 0.02 DB</span></li>
+                            <li><span class="example-product">Musluk Bataryası</span> <span class="example-value">→ 0.20 DB</span></li>
+                            <li><span class="example-product">Duş Başlığı</span> <span class="example-value">→ 0.16 DB</span></li>
+                            <li><span class="example-product">Duş Hortumu</span> <span class="example-value">→ 0.14 DB</span></li>
+                            <li><span class="example-product">Sunta Vidası Kutu</span> <span class="example-value">→ 0.02 DB</span></li>
+                            <li><span class="example-product">Civata-Somun (Adet)</span> <span class="example-value">→ 0.02 DB</span></li>
+                            <li><span class="example-product">Boya Fırçası</span> <span class="example-value">→ 0.06 DB</span></li>
+                            <li><span class="example-product">Dekoratif Aydınlatma Armatürü Ekonomik</span> <span class="example-value">→ 0.32 DB</span></li>
+                            <li><span class="example-product">Dekoratif Aydınlatma Armatürü Orta</span> <span class="example-value">→ 0.34 DB</span></li>
+                            <li><span class="example-product">Dekoratif Aydınlatma Armatürü Premium</span> <span class="example-value">→ 0.36 DB</span></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Unit Price -->
+                <div class="form-group">
+                    <label for="product-price">Birim Fiyat (₺) <span class="required">*</span></label>
+                    <input type="number" id="product-price" name="birim_fiyat" step="0.01" min="0" required placeholder="0.00">
+                </div>
+                
+                <!-- Error Message -->
+                <div id="form-error-message" class="form-error hidden"></div>
+                
+                <!-- Success Message -->
+                <div id="form-success-message" class="form-success hidden"></div>
+            </form>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="modal-cancel-btn">
+                    İptal
+                </button>
+                <button type="submit" form="add-product-form" class="btn-primary" id="modal-save-btn">
+                    <span class="btn-icon">💾</span>
+                    Kaydet
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Product Modal -->
+    <div id="edit-product-modal" class="modal hidden">
+        <div class="modal-backdrop" id="edit-modal-backdrop"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>✏️ Ürün Düzenle</h3>
+                <button class="modal-close-btn" id="edit-modal-close-btn" type="button">&times;</button>
+            </div>
+            <form id="edit-product-form" class="modal-body">
+                <!-- Hidden field for product ID -->
+                <input type="hidden" id="edit-product-id" name="urun_id">
+                
+                <!-- Product Name -->
+                <div class="form-group">
+                    <label for="edit-product-name">Ürün Adı <span class="required">*</span></label>
+                    <input type="text" id="edit-product-name" name="ad" required placeholder="Ürün adını girin">
+                </div>
+                
+                <!-- Category -->
+                <div class="form-group">
+                    <label for="edit-product-category">Kategori <span class="required">*</span></label>
+                    <select id="edit-product-category" name="kategori_id" required>
+                        <option value="">Kategori seçin...</option>
+                        <!-- Options will be loaded from API -->
+                    </select>
+                </div>
+                
+                <!-- Depo Birimi (DB) -->
+                <div class="form-group">
+                    <label for="edit-product-hacim">
+                        Depo Birimi (DB) <span class="required">*</span>
+                        <span class="help-icon" tabindex="0">?
+                            <span class="tooltip">Depo Birimi (DB), ürünün depoda kapladığı hacmi ifade eden standart bir birimdir.</span>
+                        </span>
+                    </label>
+                    <input type="number" id="edit-product-hacim" name="hacim_db" step="0.01" min="0" required placeholder="0.00">
+                </div>
+                
+                <!-- Unit Price -->
+                <div class="form-group">
+                    <label for="edit-product-price">Birim Fiyat (₺) <span class="required">*</span></label>
+                    <input type="number" id="edit-product-price" name="birim_fiyat" step="0.01" min="0" required placeholder="0.00">
+                </div>
+                
+                <!-- Error Message -->
+                <div id="edit-form-error-message" class="form-error hidden"></div>
+                
+                <!-- Success Message -->
+                <div id="edit-form-success-message" class="form-success hidden"></div>
+            </form>
+            <div class="modal-footer modal-footer-split">
+                <button type="button" class="btn-danger-outline" id="edit-modal-delete-btn">
+                    <span class="btn-icon">🗑️</span>
+                    Ürünü Sil
+                </button>
+                <div class="modal-footer-right">
+                    <button type="button" class="btn-secondary" id="edit-modal-cancel-btn">
+                        İptal
+                    </button>
+                    <button type="submit" form="edit-product-form" class="btn-primary" id="edit-modal-save-btn">
+                        <span class="btn-icon">💾</span>
+                        Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-confirm-modal" class="modal hidden">
+        <div class="modal-backdrop" id="delete-modal-backdrop"></div>
+        <div class="modal-container modal-sm">
+            <div class="modal-header modal-header-danger">
+                <h3>⚠️ Ürünü Sil</h3>
+                <button class="modal-close-btn" id="delete-modal-close-btn" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="confirm-message">Bu ürünü silmek istediğinizden emin misiniz?</p>
+                <p class="confirm-product-name" id="delete-product-name"></p>
+                <p class="confirm-warning">Bu işlem geri alınamaz.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="delete-modal-cancel-btn">
+                    İptal
+                </button>
+                <button type="button" class="btn-danger" id="delete-modal-confirm-btn">
+                    <span class="btn-icon">🗑️</span>
+                    Evet, Sil
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="js/main.js"></script>
+    <script src="/js/inflation.js"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script>
+      let depoMap = null;
+      let depoMapInitialized = false;
+
+      function initDepoMap() {
+        const mapContainer = document.getElementById('depo-map');
+        if (!mapContainer) return;
+
+        // If map already created, just fix the size and re-center
+        if (depoMapInitialized && depoMap) {
+          depoMap.invalidateSize();
+          depoMap.setView([38.4237, 27.1428], 11);
+          return;
+        }
+
+        const izmirCenter = [38.4237, 27.1428];
+
+        depoMap = L.map('depo-map').setView(izmirCenter, 11);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(depoMap);
+
+        // Optional: load depots from backend
+        fetch('/api/depots')
+          .then(response => response.json())
+          .then(depolar => {
+            if (!Array.isArray(depolar)) return;
+
+            depolar.forEach(depo => {
+              const lat = depo.latitude ?? depo.enlem;
+              const lng = depo.longitude ?? depo.boylam;
+              if (!lat || !lng) return;
+
+              const marker = L.marker([lat, lng]).addTo(depoMap);
+              const name = depo.name || depo.depo_adi || 'Depo';
+              marker.bindPopup(`<strong>${name}</strong>`);
+            });
+          })
+          .catch(err => {
+            console.error('Depo verileri alınırken hata oluştu:', err);
+          });
+
+        depoMapInitialized = true;
+      }
+
+      // Optional: do nothing on DOMContentLoaded except maybe prepare things
+      document.addEventListener('DOMContentLoaded', function () {
+        const analysisButton = document.getElementById('run-analysis-btn');
+        if (analysisButton) {
+          analysisButton.addEventListener('click', function () {
+            // Ensure map is initialized after the analysis section becomes visible
+            setTimeout(initDepoMap, 0);
+          });
+        }
+      });
+    </script>
+</body>
+</html>
+
