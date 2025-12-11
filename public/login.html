@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lider Elektrik – Giriş</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="auth-page login-page">
+    <div class="login-card">
+        <div class="login-title">Lider Elektrik – Yönetim Girişi</div>
+
+        <div class="auth-brand">
+            <div class="auth-logo">⚡</div>
+            <div class="auth-brand-text">
+                <div class="auth-brand-name">Lider Elektrik</div>
+                <div class="auth-brand-subtitle">Karar Destek Sistemi</div>
+            </div>
+        </div>
+
+        <div class="auth-heading">
+            <h1 class="auth-title">Giriş Yap</h1>
+            <p class="auth-subtitle">Devam etmek için kullanıcı bilgilerinizi girin.</p>
+        </div>
+
+        <form id="login-form" class="auth-form" autocomplete="on">
+            <div class="form-group">
+                <label for="username">Kullanıcı Adı</label>
+                <input id="username" name="username" type="text" placeholder="Kullanıcı adınızı girin" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Şifre</label>
+                <input id="password" name="password" type="password" placeholder="Şifrenizi girin" required>
+            </div>
+            <button type="submit" class="login-btn">
+                <span class="btn-icon">🔒</span>
+                Giriş Yap
+            </button>
+        </form>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('login-form');
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const form = event.target;
+            const submitButton = form.querySelector('button[type="submit"]');
+            const username = form.username.value.trim();
+            const password = form.password.value;
+
+            submitButton.disabled = true;
+            submitButton.classList.add('is-loading');
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (response.ok && data.success) {
+                    // ✅ Başarılı giriş: oturum bayrağını sessionStorage'da tut
+                    sessionStorage.setItem('liderElektrikLoggedIn', 'true');
+                    // Eski bir localStorage kaydı varsa temizle (garanti olsun)
+                    localStorage.removeItem('liderElektrikLoggedIn');
+                    window.location.href = data.redirect || '/index.html';
+                    return;
+                }
+
+                const message = data.message || 'Kullanıcı adı veya şifre hatalı.';
+                alert(message);
+            } catch (error) {
+                alert('Giriş işlemi sırasında bir hata oluştu. Lütfen tekrar deneyin.');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.classList.remove('is-loading');
+            }
+        });
+    </script>
+</body>
+</html>
+

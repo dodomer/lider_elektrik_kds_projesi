@@ -94,6 +94,193 @@ body {
 }
 
 /* =====================
+   Auth Pages
+   ===================== */
+.auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-2xl) var(--space-xl);
+}
+
+.login-page {
+    background-image: linear-gradient(
+        rgba(5, 15, 35, 0.70),
+        rgba(5, 15, 35, 0.70)
+    ), url('/images/tabelafull.webp');
+    background-size: cover;
+    background-position: center 38%;
+    background-repeat: no-repeat;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.auth-card {
+    width: min(440px, 100%);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    padding: var(--space-2xl);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    animation: fadeIn var(--transition-normal);
+}
+
+.login-card {
+    width: 380px;
+    max-width: 100%;
+    padding: 32px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.17);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.login-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: #ffffff;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.auth-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.auth-logo {
+    width: 52px;
+    height: 52px;
+    border-radius: var(--radius-full);
+    background: var(--color-primary);
+    color: var(--color-accent);
+    display: grid;
+    place-items: center;
+    font-size: 1.6rem;
+    box-shadow: var(--shadow-md);
+}
+
+.auth-brand-name {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.auth-brand-subtitle {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+.login-card .auth-brand-name,
+.login-card .auth-brand-subtitle {
+    color: #ffffff;
+}
+
+.auth-heading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.auth-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+}
+
+.auth-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.login-card .auth-title,
+.login-card .auth-subtitle {
+    color: #ffffff;
+}
+
+.auth-form .form-group:last-of-type {
+    margin-bottom: var(--space-lg);
+}
+
+.auth-submit {
+    width: 100%;
+    justify-content: center;
+}
+
+.auth-submit.is-loading {
+    opacity: 0.8;
+    pointer-events: none;
+}
+
+.login-card .form-group label {
+    color: #e8edf7;
+}
+
+.login-card .form-group input {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+.login-card .form-group input::placeholder {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.login-card .form-group input:focus {
+    border-color: #ffc857;
+    box-shadow: 0 0 0 3px rgba(255, 200, 87, 0.35);
+}
+
+.login-btn {
+    background: #FFC93C;
+    color: #1a1a1a;
+    font-weight: 600;
+    border: none;
+    padding: 12px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    width: 100%;
+    box-shadow: 0 8px 24px rgba(255, 201, 60, 0.35);
+}
+
+.login-btn:hover {
+    background: #ffdd6e;
+}
+
+.login-btn:disabled {
+    opacity: 0.85;
+    cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+    .auth-card {
+        padding: var(--space-xl);
+    }
+}
+
+/* =====================
    Header
    ===================== */
 .header {
@@ -200,6 +387,47 @@ body {
     font-size: 1rem;
 }
 
+.logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(137, 6, 19, 0.355);
+  border-color: rgba(220, 53, 69, 0.85);
+  color: #f5f5f5;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.logout-btn:hover {
+  background: rgba(220, 53, 69, 0.16); /* hafif kırmızımtrak glow */
+  border-color: rgba(220, 53, 69, 0.7);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
+}
+
+.logout-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(148, 28, 28, 0.4);
+}
+
+.logout-icon {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.logout-label {
+    letter-spacing: 0.02em;
+}
+    
+
 /* =====================
    Main Content
    ===================== */
@@ -218,8 +446,6 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: radial-gradient(circle at 20% 20%, rgba(255, 200, 87, 0.08), transparent 40%), 
-                linear-gradient(135deg, var(--color-primary) 0%, #0f2f52 55%, #081d32 100%);
     border-radius: var(--radius-lg);
     padding: var(--space-xl) var(--space-2xl);
     margin-bottom: var(--space-xl);
@@ -231,12 +457,33 @@ body {
 .hero-section::before {
     content: '';
     position: absolute;
-    top: -50%;
-    right: -10%;
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(255, 200, 87, 0.18) 0%, transparent 72%);
+    inset: 0;
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    background: rgba(0, 0, 0, 0.12);
     pointer-events: none;
+    z-index: 0;
+}
+
+.hero-section > * {
+    position: relative;
+    z-index: 1;
+}
+
+.hero-banner {
+    background-image: linear-gradient(120deg, rgba(5, 24, 55, 0.92), rgba(5, 24, 55, 0.78)), url('/images/tabela.png');
+    background-size: cover;
+    background-position: center 30%;
+    background-repeat: no-repeat;
+    color: #ffffff;
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+}
+
+.hero-banner h1,
+.hero-banner h2,
+.hero-banner p {
+    color: #ffffff;
 }
 
 .hero-text {

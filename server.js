@@ -36,12 +36,31 @@ app.use(express.urlencoded({ extended: true }));
 // API Routes (must come BEFORE static files)
 // ======================
 
+// Simple login endpoint (demo credentials)
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+
+    if (username === "Lider Elektrik" && password === "123") {
+        return res.json({ success: true, redirect: "/index.html" });
+    }
+
+    return res.status(401).json({
+        success: false,
+        message: "Kullanıcı adı veya şifre hatalı."
+    });
+});
+
 // Mount API routes at /api
 app.use('/api', apiRoutes);
 
 // ======================
 // Static Files & SPA Fallback
 // ======================
+
+// Default entry: login page
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
 
 // Serve static files from the /public directory
 app.use(express.static(path.join(__dirname, 'public')));

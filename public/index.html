@@ -1,6 +1,19 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
+<script>
+  (function () {
+    const isLoggedIn = sessionStorage.getItem('liderElektrikLoggedIn');
+
+    if (isLoggedIn !== 'true') {
+      // Eski localStorage kaydı falan varsa yine de güvenme, temizle
+      localStorage.removeItem('liderElektrikLoggedIn');  
+      // Giriş yapılmamışsa login sayfasına yönlendir
+      window.location.href = '/login.html';
+    }
+  })();
+</script>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lider Elektrik – Depo Karar Destek Sistemi</title>
@@ -43,6 +56,10 @@
                     <span class="header-link-icon">📋</span>
                     Tüm Ürünler
                 </button>
+                <button class="logout-btn" onclick="logout()">
+                    <span class="logout-icon">⏻</span>
+                    <span class="logout-label">Çıkış Yap</span>
+                </button>
             </nav>
         </div>
     </header>
@@ -55,7 +72,7 @@
         <!-- ==================== -->
         <div id="overview-section">
             <!-- Hero Section with Main Action -->
-            <section class="hero-section">
+            <section class="hero-section hero-banner">
                 <div class="hero-text">
                     <h2>Depo Kararınızı Veriye Dayalı Alın</h2>
                     <p>Mağaza doluluk oranı, satış trendleri ve depo maliyetlerini analiz ederek en uygun kararı öneririz.</p>
@@ -719,6 +736,14 @@
           });
         }
       });
+
+      function logout() {
+        // Hem sessionStorage hem localStorage temizle (her ihtimale karşı)
+        sessionStorage.removeItem('liderElektrikLoggedIn');
+        localStorage.removeItem('liderElektrikLoggedIn');
+        // Redirect to login page
+        window.location.href = '/login.html';
+      }
     </script>
 </body>
 </html>
