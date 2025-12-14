@@ -50,6 +50,52 @@ router.get('/health', (req, res) => {
     });
 });
 
+/**
+ * GET /api/analytics/revenue-trend
+ * Returns monthly revenue trend for the last N months (default 6)
+ * Params: months (1-12)
+ */
+router.get('/analytics/revenue-trend', async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    try {
+        let months = parseInt(req.query.months || '6', 10);
+        if (isNaN(months) || months < 1) months = 6;
+        if (months > 12) months = 12;
+
+        const sql = `
+            SELECT 
+                DATE_FORMAT(tarih, '%Y-%m') AS ym,
+                SUM(adet * birim_fiyat) AS revenue
+            FROM satislar
+            WHERE tarih >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
+            GROUP BY ym
+            ORDER BY ym
+        `;
+
+        const rows = await db.query(sql, [months]);
+
+        const data = rows.map(r => ({
+            ym: r.ym,
+            revenue: parseFloat(r.revenue || 0)
+        }));
+
+        console.log(`📈 /api/analytics/revenue-trend - months: ${months}, rows: ${data.length}`);
+
+        return res.json({
+            success: true,
+            months,
+            data
+        });
+    } catch (error) {
+        console.error('❌ Error fetching revenue trend:', error.message);
+        return res.status(500).json({
+            success: false,
+            error: 'Satış trendi verileri alınırken bir hata oluştu.',
+            message: error.message
+        });
+    }
+});
+
 // ======================
 // Placeholder Endpoints (To be implemented in Phase 2+)
 // ======================
@@ -172,30 +218,61 @@ router.get('/sales-details', async (req, res) => {
         
         console.log(`📅 Date range: ${startDate} to ${endDate}`);
         
-        // Query to get top 10 products by revenue for the specified month
-        const sql = `
+        // Aggregate sales per product for the month (include products with zero sales)
+        const salesSql = `
             SELECT 
                 u.urun_id,
                 u.ad AS urun_adi,
                 COALESCE(SUM(s.adet), 0) AS toplam_adet,
                 COALESCE(SUM(s.toplam_tutar), 0) AS toplam_tutar
-            FROM satislar s
-            INNER JOIN urunler u ON s.urun_id = u.urun_id
-            WHERE s.tarih BETWEEN ? AND ?
+            FROM urunler u
+            LEFT JOIN satislar s 
+                ON s.urun_id = u.urun_id
+                AND s.tarih BETWEEN ? AND ?
                 AND s.lokasyon_id = 1
+            WHERE u.aktif_mi = 1
             GROUP BY u.urun_id, u.ad
-            ORDER BY toplam_tutar DESC
-            LIMIT 10
         `;
-        
-        const items = await db.query(sql, [startDate, endDate]);
-        
-        console.log(`✅ /api/sales-details - Month: ${month}, Found ${items.length} products`);
+
+        const rows = await db.query(salesSql, [startDate, endDate]);
+
+        const normalized = rows.map(row => ({
+            urun_id: row.urun_id,
+            urun_adi: row.urun_adi,
+            toplam_adet: parseInt(row.toplam_adet || 0, 10),
+            toplam_tutar: parseFloat(row.toplam_tutar || 0)
+        }));
+
+        // Build union of top 10 by revenue and top 10 by quantity
+        const topRevenue = [...normalized].sort((a, b) => b.toplam_tutar - a.toplam_tutar).slice(0, 10);
+        const topQuantity = [...normalized].sort((a, b) => b.toplam_adet - a.toplam_adet).slice(0, 10);
+
+        const combinedMap = new Map();
+        [...topRevenue, ...topQuantity].forEach(item => {
+            combinedMap.set(item.urun_id, item);
+        });
+
+        let combined = Array.from(combinedMap.values());
+
+        // If still fewer than 10, pad with other active products (zero sales included)
+        if (combined.length < 10) {
+            const filler = normalized
+                .filter(item => !combinedMap.has(item.urun_id))
+                .sort((a, b) => b.toplam_tutar - a.toplam_tutar)
+                .slice(0, 10 - combined.length);
+            filler.forEach(item => combinedMap.set(item.urun_id, item));
+            combined = Array.from(combinedMap.values());
+        }
+
+        // Sort by revenue for a stable response; frontend will re-sort per mode
+        combined.sort((a, b) => b.toplam_tutar - a.toplam_tutar);
+
+        console.log(`✅ /api/sales-details - Month: ${month}, Returning ${combined.length} products (union of top revenue & quantity)`);
         
         return res.json({
             success: true,
             month: month,
-            items: items
+            items: combined
         });
     } catch (error) {
         console.error('❌ Error fetching sales details:', error.message);

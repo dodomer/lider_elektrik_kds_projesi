@@ -47,6 +47,16 @@ const elements = {
     chartModeQuantity: document.getElementById('chart-mode-quantity'),
     // Monthly total ciro element
     monthlyCiroValue: document.getElementById('monthly-ciro-value'),
+    // Analysis charts (analysis page)
+    analysisQuantityChart: document.getElementById('analysis-quantity-chart'),
+    analysisRevenueChart: document.getElementById('analysis-revenue-chart'),
+    analysisQuantityLoading: document.getElementById('analysis-quantity-loading'),
+    analysisRevenueLoading: document.getElementById('analysis-revenue-loading'),
+    analysisQuantityError: document.getElementById('analysis-quantity-error'),
+    analysisRevenueError: document.getElementById('analysis-revenue-error'),
+    analysisTrendChart: document.getElementById('analysis-trend-chart'),
+    analysisTrendLoading: document.getElementById('analysis-trend-loading'),
+    analysisTrendError: document.getElementById('analysis-trend-error'),
     // Sales insights elements
     insightsLoading: document.getElementById('insights-loading'),
     insightsContent: document.getElementById('insights-content'),
@@ -160,6 +170,12 @@ let salesChartMode = 'revenue';
 // Raw sales data from API (to allow re-sorting without refetching)
 let salesChartRawData = [];
 
+// Analysis page chart instances and cache
+let analysisQuantityChartInstance = null;
+let analysisRevenueChartInstance = null;
+let analysisChartData = [];
+let analysisTrendChartInstance = null;
+
 // Cached utilization data (to share between dashboard and analysis section)
 let cachedUtilizationData = null;
 
@@ -198,6 +214,8 @@ function showAnalysisSection() {
         
         // Load utilization for the analysis section
         loadStoreUtilization('analysis');
+        loadAnalysisProductCharts();
+        loadAnalysisRevenueTrend();
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -226,6 +244,389 @@ function showProductsSection() {
  */
 function runAnalysis() {
     showAnalysisSection();
+}
+
+// ======================
+// Analysis Page Product Charts (Map View)
+// ======================
+
+/**
+ * Set chart visibility state for analysis charts
+ * @param {HTMLElement} loadingEl
+ * @param {HTMLElement} errorEl
+ * @param {HTMLCanvasElement} canvasEl
+ * @param {'loading'|'error'|'ready'} state
+ * @param {string} [message]
+ */
+function setAnalysisChartState(loadingEl, errorEl, canvasEl, state, message = '') {
+    if (loadingEl) {
+        loadingEl.classList.toggle('hidden', state !== 'loading');
+    }
+    if (errorEl) {
+        if (message) {
+            errorEl.textContent = message;
+        }
+        errorEl.classList.toggle('hidden', state !== 'error');
+    }
+    if (canvasEl) {
+        canvasEl.classList.toggle('hidden', state !== 'ready');
+    }
+}
+
+/**
+ * Show loading state on both analysis charts
+ */
+function showAnalysisChartsLoading() {
+    setAnalysisChartState(elements.analysisQuantityLoading, elements.analysisQuantityError, elements.analysisQuantityChart, 'loading');
+    setAnalysisChartState(elements.analysisRevenueLoading, elements.analysisRevenueError, elements.analysisRevenueChart, 'loading');
+}
+
+/**
+ * Show error state on both analysis charts
+ * @param {string} message
+ */
+function showAnalysisChartError(message = 'Veriler yüklenemedi.') {
+    setAnalysisChartState(elements.analysisQuantityLoading, elements.analysisQuantityError, elements.analysisQuantityChart, 'error', message);
+    setAnalysisChartState(elements.analysisRevenueLoading, elements.analysisRevenueError, elements.analysisRevenueChart, 'error', message);
+}
+
+/**
+ * Load product performance charts for analysis page using existing sales-details endpoint
+ */
+async function loadAnalysisProductCharts() {
+    showAnalysisChartsLoading();
+    const month = getCurrentMonth();
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/sales-details?month=${month}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.success || !Array.isArray(data.items) || data.items.length === 0) {
+            throw new Error('NO_DATA');
+        }
+
+        analysisChartData = data.items;
+        renderAnalysisProductCharts();
+    } catch (error) {
+        console.error('❌ Analysis product chart load error:', error);
+        analysisChartData = [];
+        showAnalysisChartError('Veriler yüklenemedi.');
+    }
+}
+
+/**
+ * Render quantity and revenue charts for analysis page
+ */
+function renderAnalysisProductCharts() {
+    if (!analysisChartData || analysisChartData.length === 0) {
+        showAnalysisChartError('Veriler yüklenemedi.');
+        return;
+    }
+
+    const topQuantity = [...analysisChartData]
+        .sort((a, b) => parseInt(b.toplam_adet || 0) - parseInt(a.toplam_adet || 0))
+        .slice(0, 10);
+
+    const topRevenue = [...analysisChartData]
+        .sort((a, b) => parseFloat(b.toplam_tutar || 0) - parseFloat(a.toplam_tutar || 0))
+        .slice(0, 10);
+
+    renderAnalysisBarChart({
+        items: topQuantity,
+        mode: 'quantity',
+        canvas: elements.analysisQuantityChart,
+        loadingEl: elements.analysisQuantityLoading,
+        errorEl: elements.analysisQuantityError
+    });
+
+    renderAnalysisBarChart({
+        items: topRevenue,
+        mode: 'revenue',
+        canvas: elements.analysisRevenueChart,
+        loadingEl: elements.analysisRevenueLoading,
+        errorEl: elements.analysisRevenueError
+    });
+}
+
+/**
+ * Render a single analysis bar chart
+ * @param {Object} params
+ * @param {Array} params.items
+ * @param {'quantity'|'revenue'} params.mode
+ * @param {HTMLCanvasElement} params.canvas
+ * @param {HTMLElement} params.loadingEl
+ * @param {HTMLElement} params.errorEl
+ */
+function renderAnalysisBarChart({ items, mode, canvas, loadingEl, errorEl }) {
+    if (!canvas || !items || items.length === 0) {
+        setAnalysisChartState(loadingEl, errorEl, canvas, 'error', 'Veriler yüklenemedi.');
+        return;
+    }
+
+    setAnalysisChartState(loadingEl, errorEl, canvas, 'ready');
+
+    const baseNames = items.map(item => item.urun_adi || item.ad || 'Ürün');
+    const labels =baseNames;
+    const dataValues = mode === 'revenue'
+        ? items.map(item => parseFloat(item.toplam_tutar || 0))
+        : items.map(item => parseInt(item.toplam_adet || 0));
+
+    const palette = mode === 'revenue'
+        ? { bar: '#13A865', hover: '#0d8a50', border: 'rgba(19, 168, 101, 0.25)' }
+        : { bar: '#0F2038', hover: '#1a3a5c', border: 'rgba(15, 32, 56, 0.2)' };
+
+    if (mode === 'revenue' && analysisRevenueChartInstance) {
+        analysisRevenueChartInstance.destroy();
+    }
+    if (mode === 'quantity' && analysisQuantityChartInstance) {
+        analysisQuantityChartInstance.destroy();
+    }
+
+    const chartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: mode === 'revenue' ? 'Ciro (₺)' : 'Satış Adedi',
+                data: dataValues,
+                backgroundColor: palette.bar,
+                hoverBackgroundColor: palette.hover,
+                borderColor: palette.border,
+                borderWidth: 1.5,
+                borderRadius: 6,
+                maxBarThickness: 44
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(10, 37, 64, 0.95)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
+                    padding: 12,
+                    callbacks: {
+                        title: (context) => labels[context[0].dataIndex],
+                        label: (context) => mode === 'revenue'
+                            ? formatCurrencyTL(context.parsed.x)
+                            : `${formatNumber(context.parsed.x)} adet`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#64748b',
+                        callback: (value) => mode === 'revenue'
+                            ? formatRevenueTick(value)
+                            : formatQuantityTick(value)
+                    },
+                    grid: {
+                        color: 'rgba(226, 232, 240, 0.8)'
+                    }
+                },
+                y: {
+                    ticks: {
+                        color: '#64748b',
+                        autoSkip: false,
+                        callback: function(value) {
+                            const label = this.getLabelForValue(value) || '';
+                            return label.replace(/\s*#\d+/, '').trim();
+                        }
+                    },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+
+    if (mode === 'revenue') {
+        analysisRevenueChartInstance = chartInstance;
+    } else {
+        analysisQuantityChartInstance = chartInstance;
+    }
+}
+
+/**
+ * Format revenue tick values for Y axis
+ * @param {number} value
+ * @returns {string}
+ */
+function formatRevenueTick(value) {
+    if (value >= 1000000) {
+        return `${(value / 1000000).toFixed(1)}M ₺`;
+    }
+    if (value >= 1000) {
+        return `${(value / 1000).toFixed(0)}K ₺`;
+    }
+    return `${formatNumber(value)} ₺`;
+}
+
+/**
+ * Format quantity tick values for Y axis
+ * @param {number} value
+ * @returns {string}
+ */
+function formatQuantityTick(value) {
+    if (value >= 1000000) {
+        return `${(value / 1000000).toFixed(1)}M`;
+    }
+    if (value >= 1000) {
+        return `${(value / 1000).toFixed(0)}K`;
+    }
+    return formatNumber(value);
+}
+
+/**
+ * Load last 6 months revenue trend
+ */
+async function loadAnalysisRevenueTrend() {
+    if (!elements.analysisTrendChart) return;
+
+    setTrendChartState('loading');
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/analytics/revenue-trend?months=6`);
+        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+        const data = await response.json();
+        if (!data.success || !Array.isArray(data.data)) {
+            throw new Error('Geçersiz veri');
+        }
+
+        const trend = normalizeTrendData(data.data, 6);
+        renderAnalysisTrendChart(trend);
+    } catch (error) {
+        console.error('❌ Trend data error:', error);
+        setTrendChartState('error', 'Veriler yüklenemedi.');
+    }
+}
+
+/**
+ * Normalize trend data to last N months, filling missing with 0
+ * @param {Array} rows
+ * @param {number} monthsCount
+ */
+function normalizeTrendData(rows, monthsCount) {
+    const map = new Map();
+    rows.forEach(r => {
+        map.set(r.ym, parseFloat(r.revenue || 0));
+    });
+
+    const labels = [];
+    const values = [];
+    const today = new Date();
+    const shortMonths = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+
+    for (let i = monthsCount - 1; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = `${shortMonths[d.getMonth()]} ${d.getFullYear()}`;
+        labels.push(label);
+        values.push(map.get(ym) || 0);
+    }
+
+    return { labels, values };
+}
+
+/**
+ * Set trend chart UI state
+ * @param {'loading'|'error'|'ready'} state
+ * @param {string} [message]
+ */
+function setTrendChartState(state, message = '') {
+    if (elements.analysisTrendLoading) {
+        elements.analysisTrendLoading.classList.toggle('hidden', state !== 'loading');
+    }
+    if (elements.analysisTrendError) {
+        if (message) elements.analysisTrendError.textContent = message;
+        elements.analysisTrendError.classList.toggle('hidden', state !== 'error');
+    }
+    if (elements.analysisTrendChart) {
+        elements.analysisTrendChart.classList.toggle('hidden', state !== 'ready');
+    }
+}
+
+/**
+ * Render revenue trend line chart
+ * @param {{labels:string[], values:number[]}} data
+ */
+function renderAnalysisTrendChart(data) {
+    if (!data || !data.labels || !data.values) {
+        setTrendChartState('error', 'Veriler yüklenemedi.');
+        return;
+    }
+
+    setTrendChartState('ready');
+
+    if (analysisTrendChartInstance) {
+        analysisTrendChartInstance.destroy();
+    }
+
+    const ctx = elements.analysisTrendChart.getContext('2d');
+
+    analysisTrendChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.labels,
+            datasets: [{
+                label: 'Toplam Ciro (₺)',
+                data: data.values,
+                borderColor: '#0F2038',
+                backgroundColor: 'rgba(15, 32, 56, 0.12)',
+                borderWidth: 3,
+                pointBackgroundColor: '#0F2038',
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 2,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                pointHoverBackgroundColor: '#1a3a5c',
+                fill: true,
+                tension: 0.25
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(10, 37, 64, 0.95)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
+                    padding: 12,
+                    callbacks: {
+                        label: (context) => formatCurrencyTL(context.parsed.y)
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        color: '#64748b'
+                    },
+                    grid: { display: false }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#64748b',
+                        callback: (value) => formatRevenueTick(value)
+                    },
+                    grid: {
+                        color: 'rgba(226, 232, 240, 0.8)'
+                    }
+                }
+            }
+        }
+    });
 }
 
 // ======================

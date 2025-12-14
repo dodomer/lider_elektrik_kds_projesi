@@ -1019,6 +1019,22 @@ body {
     justify-content: center;
 }
 
+.chart-container-compact {
+    position: relative;
+    height: 340px;
+    max-height: 340px;
+    background: var(--bg-page);
+    border: 2px dashed var(--border-light);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm);
+    overflow: hidden;
+}
+
+.chart-container-compact canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
 .stats-placeholder {
     min-height: 180px;
     display: flex;
@@ -1070,6 +1086,36 @@ body {
     font-style: italic;
     text-align: center;
     padding: var(--space-xl);
+}
+
+.chart-error {
+    color: #d14343;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: center;
+    padding: var(--space-md) var(--space-sm);
+}
+
+/* Analysis charts grid (analysis page) */
+.analysis-product-charts {
+    margin-bottom: var(--space-xxl);
+}
+
+.analysis-charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-lg);
+    align-items: stretch;
+}
+
+@media (max-width: 900px) {
+    .analysis-charts-grid {
+        grid-template-columns: 1fr;
+    }
+    .chart-container-compact {
+        height: 300px;
+        max-height: 300px;
+    }
 }
 
 /* Card header subtitle */

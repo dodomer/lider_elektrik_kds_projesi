@@ -466,6 +466,66 @@
 
             <!-- Analysis Content -->
             <div class="analysis-content">
+                <section class="analysis-product-charts">
+                  <h2 class="section-title">Ürün Performans Grafikleri</h2>
+                  <p class="section-subtitle">
+                    En güncel satış verilerini kullanarak ürün performansını görüntüleyin.
+                  </p>
+                  <div class="analysis-charts-grid">
+                    <div class="card card-chart card-visible">
+                      <div class="card-header">
+                        <span class="card-icon">📦</span>
+                        <div class="card-header-content">
+                          <h3>En Çok Satan 10 Ürün</h3>
+                          <p class="card-subtitle">Adet bazında sıralama</p>
+                        </div>
+                      </div>
+                      <div class="card-body">
+                        <div class="chart-container-compact">
+                          <div class="chart-loading" id="analysis-quantity-loading"><p>Grafik yükleniyor...</p></div>
+                          <p class="chart-error hidden" id="analysis-quantity-error">Veriler yüklenemedi.</p>
+                          <canvas id="analysis-quantity-chart" class="hidden"></canvas>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="card card-chart card-visible">
+                      <div class="card-header">
+                        <span class="card-icon">💰</span>
+                        <div class="card-header-content">
+                          <h3>En Çok Ciro Yapan 10 Ürün</h3>
+                          <p class="card-subtitle">Ciro bazında sıralama</p>
+                        </div>
+                      </div>
+                      <div class="card-body">
+                        <div class="chart-container-compact">
+                          <div class="chart-loading" id="analysis-revenue-loading"><p>Grafik yükleniyor...</p></div>
+                          <p class="chart-error hidden" id="analysis-revenue-error">Veriler yüklenemedi.</p>
+                          <canvas id="analysis-revenue-chart" class="hidden"></canvas>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="analysis-trend-section">
+                  <div class="card card-chart card-visible">
+                    <div class="card-header card-header-chart">
+                      <div class="card-header-left">
+                        <span class="card-icon">📊</span>
+                        <h3>Son 6 Ay Satış Trendi (Toplam Ciro)</h3>
+                      </div>
+                    </div>
+                    <div class="card-body">
+                      <div class="chart-container-compact" style="height:360px;max-height:360px;">
+                        <div class="chart-loading" id="analysis-trend-loading"><p>Grafik yükleniyor...</p></div>
+                        <p class="chart-error hidden" id="analysis-trend-error">Veriler yüklenemedi.</p>
+                        <canvas id="analysis-trend-chart" class="hidden"></canvas>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
                 <section class="analysis-map-section">
                   <h2 class="section-title">İzmir Depo Haritası</h2>
                   <p class="section-subtitle">
