@@ -50,52 +50,6 @@ router.get('/health', (req, res) => {
     });
 });
 
-/**
- * GET /api/analytics/revenue-trend
- * Returns monthly revenue trend for the last N months (default 6)
- * Params: months (1-12)
- */
-router.get('/analytics/revenue-trend', async (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    try {
-        let months = parseInt(req.query.months || '6', 10);
-        if (isNaN(months) || months < 1) months = 6;
-        if (months > 12) months = 12;
-
-        const sql = `
-            SELECT 
-                DATE_FORMAT(tarih, '%Y-%m') AS ym,
-                SUM(adet * birim_fiyat) AS revenue
-            FROM satislar
-            WHERE tarih >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
-            GROUP BY ym
-            ORDER BY ym
-        `;
-
-        const rows = await db.query(sql, [months]);
-
-        const data = rows.map(r => ({
-            ym: r.ym,
-            revenue: parseFloat(r.revenue || 0)
-        }));
-
-        console.log(`📈 /api/analytics/revenue-trend - months: ${months}, rows: ${data.length}`);
-
-        return res.json({
-            success: true,
-            months,
-            data
-        });
-    } catch (error) {
-        console.error('❌ Error fetching revenue trend:', error.message);
-        return res.status(500).json({
-            success: false,
-            error: 'Satış trendi verileri alınırken bir hata oluştu.',
-            message: error.message
-        });
-    }
-});
-
 // ======================
 // Placeholder Endpoints (To be implemented in Phase 2+)
 // ======================
@@ -178,6 +132,76 @@ router.get('/depots', async (req, res) => {
 });
 
 /**
+ * GET /api/monthly-revenue
+ * Returns the FULL monthly revenue total (all products, no LIMIT)
+ * Query params: month (YYYY-MM format, defaults to current month)
+ * Returns: { success: true, month: 'YYYY-MM', monthly_total: number }
+ */
+router.get('/monthly-revenue', async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    
+    try {
+        // Get month parameter or default to current month
+        let month = req.query.month;
+        
+        if (!month) {
+            const now = new Date();
+            month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        }
+        
+        console.log(`💰 /api/monthly-revenue - Requested month: ${month}`);
+        
+        // Validate month format (YYYY-MM)
+        const monthRegex = /^\d{4}-(0[1-9]|1[0-2])$/;
+        if (!monthRegex.test(month)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Geçersiz ay formatı. YYYY-MM formatında olmalıdır.'
+            });
+        }
+        
+        // Parse year and month for date range calculation
+        const [year, monthNum] = month.split('-');
+        const yearInt = parseInt(year);
+        const monthInt = parseInt(monthNum);
+        
+        // Calculate start and end dates for the month
+        const startDate = `${year}-${monthNum}-01 00:00:00`;
+        const lastDay = new Date(yearInt, monthInt, 0).getDate();
+        const endDate = `${year}-${monthNum}-${String(lastDay).padStart(2, '0')} 23:59:59`;
+        
+        console.log(`📅 Date range: ${startDate} to ${endDate}`);
+        
+        // Query to get FULL monthly revenue (SUM of adet * birim_fiyat for ALL products)
+        const sql = `
+            SELECT SUM(adet * birim_fiyat) AS monthly_total
+            FROM satislar
+            WHERE YEAR(tarih) = ? AND MONTH(tarih) = ?
+                AND lokasyon_id = 1
+        `;
+        
+        const result = await db.query(sql, [yearInt, monthInt]);
+        const monthlyTotal = parseFloat(result[0]?.monthly_total || 0);
+        
+        console.log(`✅ /api/monthly-revenue - Month: ${month}, Total: ${monthlyTotal.toFixed(2)} TL`);
+        
+        return res.json({
+            success: true,
+            month: month,
+            monthly_total: monthlyTotal
+        });
+    } catch (error) {
+        console.error('❌ Error fetching monthly revenue:', error.message);
+        console.error('❌ Full error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Aylık toplam ciro yüklenirken bir hata oluştu.',
+            message: error.message
+        });
+    }
+});
+
+/**
  * GET /api/sales-details
  * Returns top 10 products by revenue for a specific month
  * Query params: month (YYYY-MM format, defaults to current month)
@@ -218,61 +242,30 @@ router.get('/sales-details', async (req, res) => {
         
         console.log(`📅 Date range: ${startDate} to ${endDate}`);
         
-        // Aggregate sales per product for the month (include products with zero sales)
-        const salesSql = `
+        // Query to get top 10 products by revenue for the specified month
+        const sql = `
             SELECT 
                 u.urun_id,
                 u.ad AS urun_adi,
                 COALESCE(SUM(s.adet), 0) AS toplam_adet,
                 COALESCE(SUM(s.toplam_tutar), 0) AS toplam_tutar
-            FROM urunler u
-            LEFT JOIN satislar s 
-                ON s.urun_id = u.urun_id
-                AND s.tarih BETWEEN ? AND ?
+            FROM satislar s
+            INNER JOIN urunler u ON s.urun_id = u.urun_id
+            WHERE s.tarih BETWEEN ? AND ?
                 AND s.lokasyon_id = 1
-            WHERE u.aktif_mi = 1
             GROUP BY u.urun_id, u.ad
+            ORDER BY toplam_tutar DESC
+            LIMIT 10
         `;
-
-        const rows = await db.query(salesSql, [startDate, endDate]);
-
-        const normalized = rows.map(row => ({
-            urun_id: row.urun_id,
-            urun_adi: row.urun_adi,
-            toplam_adet: parseInt(row.toplam_adet || 0, 10),
-            toplam_tutar: parseFloat(row.toplam_tutar || 0)
-        }));
-
-        // Build union of top 10 by revenue and top 10 by quantity
-        const topRevenue = [...normalized].sort((a, b) => b.toplam_tutar - a.toplam_tutar).slice(0, 10);
-        const topQuantity = [...normalized].sort((a, b) => b.toplam_adet - a.toplam_adet).slice(0, 10);
-
-        const combinedMap = new Map();
-        [...topRevenue, ...topQuantity].forEach(item => {
-            combinedMap.set(item.urun_id, item);
-        });
-
-        let combined = Array.from(combinedMap.values());
-
-        // If still fewer than 10, pad with other active products (zero sales included)
-        if (combined.length < 10) {
-            const filler = normalized
-                .filter(item => !combinedMap.has(item.urun_id))
-                .sort((a, b) => b.toplam_tutar - a.toplam_tutar)
-                .slice(0, 10 - combined.length);
-            filler.forEach(item => combinedMap.set(item.urun_id, item));
-            combined = Array.from(combinedMap.values());
-        }
-
-        // Sort by revenue for a stable response; frontend will re-sort per mode
-        combined.sort((a, b) => b.toplam_tutar - a.toplam_tutar);
-
-        console.log(`✅ /api/sales-details - Month: ${month}, Returning ${combined.length} products (union of top revenue & quantity)`);
+        
+        const items = await db.query(sql, [startDate, endDate]);
+        
+        console.log(`✅ /api/sales-details - Month: ${month}, Found ${items.length} products`);
         
         return res.json({
             success: true,
             month: month,
-            items: combined
+            items: items
         });
     } catch (error) {
         console.error('❌ Error fetching sales details:', error.message);
@@ -535,6 +528,263 @@ router.get('/analysis/latest', (req, res) => {
 });
 
 // ======================
+// Locations Endpoints
+// ======================
+
+/**
+ * GET /api/lokasyonlar
+ * Returns all locations (magaza + depo) with their capacity and current occupancy
+ * Used for product creation to select where to store stock
+ */
+router.get('/lokasyonlar', async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    
+    try {
+        // Get all locations with their capacity
+        const locationsSql = `
+            SELECT 
+                lokasyon_id, 
+                ad, 
+                tur, 
+                kapasite_db, 
+                kullanilabilir_kapasite_db
+            FROM lokasyonlar
+            WHERE sahip_miyiz=1
+            ORDER BY (tur='magaza') DESC, lokasyon_id ASC
+        `;
+        
+        const locations = await db.query(locationsSql);
+        
+        // For each location, calculate current used_db and occupancy percentage
+        const locationsWithOccupancy = await Promise.all(
+            locations.map(async (loc) => {
+                const usedSql = `
+                    SELECT 
+                        COALESCE(SUM(s.miktar * u.hacim_db), 0) AS used_db
+                    FROM stoklar s
+                    INNER JOIN urunler u ON s.urun_id = u.urun_id
+                    WHERE s.lokasyon_id = ? AND u.aktif_mi = 1
+                `;
+                
+                const [usedResult] = await db.query(usedSql, [loc.lokasyon_id]);
+                const used_db = parseFloat(usedResult?.used_db || 0);
+                const capacity_db = parseFloat(loc.kullanilabilir_kapasite_db || loc.kapasite_db || 0);
+                
+                const doluluk_yuzde = capacity_db > 0 
+                    ? Math.round((used_db / capacity_db) * 100 * 100) / 100 
+                    : 0;
+                
+                return {
+                    lokasyon_id: loc.lokasyon_id,
+                    ad: loc.ad,
+                    tur: loc.tur,
+                    kapasite_db: parseFloat(loc.kapasite_db || 0),
+                    kullanilabilir_kapasite_db: capacity_db,
+                    used_db: used_db,
+                    doluluk_yuzde: doluluk_yuzde
+                };
+            })
+        );
+        
+        console.log(`📍 /api/lokasyonlar - Returning ${locationsWithOccupancy.length} locations`);
+        
+        return res.json({
+            success: true,
+            count: locationsWithOccupancy.length,
+            data: locationsWithOccupancy
+        });
+    } catch (error) {
+        console.error('❌ Error fetching locations:', error.message);
+        return res.status(500).json({
+            success: false,
+            error: 'Lokasyonlar yüklenirken bir hata oluştu.',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * Calculate distance between two coordinates using Haversine formula
+ * @param {number} lat1 - Latitude of first point
+ * @param {number} lon1 - Longitude of first point
+ * @param {number} lat2 - Latitude of second point
+ * @param {number} lon2 - Longitude of second point
+ * @returns {number} Distance in kilometers
+ */
+function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+/**
+ * GET /api/en-uygun-depolar
+ * Returns ranked list of best warehouses (depots) based on capacity, price, and distance
+ * Uses real database data to compute scores
+ */
+router.get('/en-uygun-depolar', async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    
+    try {
+        // Find main store (reference location)
+        const mainStoreSql = `
+            SELECT lokasyon_id, ad, enlem, boylam
+            FROM lokasyonlar
+            WHERE tur = 'magaza'
+            LIMIT 1
+        `;
+        
+        const mainStore = await db.query(mainStoreSql);
+        
+        if (mainStore.length === 0) {
+            return res.json({
+                success: true,
+                message: 'Ana mağaza bulunamadı.',
+                data: []
+            });
+        }
+        
+        const mainStoreLat = parseFloat(mainStore[0].enlem);
+        const mainStoreLon = parseFloat(mainStore[0].boylam);
+        
+        // Get all candidate depots
+        const depotsSql = `
+            SELECT 
+                lokasyon_id,
+                ad,
+                tur,
+                enlem,
+                boylam,
+                aylik_kira,
+                kapasite_db,
+                kullanilabilir_kapasite_db
+            FROM lokasyonlar
+            WHERE tur = 'depo'
+            ORDER BY lokasyon_id ASC
+        `;
+        
+        const depots = await db.query(depotsSql);
+        
+        if (depots.length === 0) {
+            return res.json({
+                success: true,
+                message: 'Depo bulunamadı.',
+                data: []
+            });
+        }
+        
+        // Calculate metrics for each depot
+        const depotsWithMetrics = depots.map(depot => {
+            const depotLat = parseFloat(depot.enlem);
+            const depotLon = parseFloat(depot.boylam);
+            
+            // Calculate distance using Haversine formula
+            const distanceKm = calculateHaversineDistance(
+                mainStoreLat, 
+                mainStoreLon, 
+                depotLat, 
+                depotLon
+            );
+            
+            // Get capacity (prefer kullanilabilir_kapasite_db, fallback to kapasite_db)
+            const capacity = parseFloat(depot.kullanilabilir_kapasite_db || depot.kapasite_db || 0);
+            
+            // Get price
+            const price = parseFloat(depot.aylik_kira || 0);
+            
+            return {
+                depo_id: depot.lokasyon_id,
+                depo_adi: depot.ad,
+                aylik_kira: price,
+                kapasite_db: capacity,
+                distance_km: Math.round(distanceKm * 100) / 100, // Round to 2 decimals
+                enlem: depotLat,
+                boylam: depotLon
+            };
+        });
+        
+        // Normalize values for scoring (0-1 scale)
+        // Find min/max for each metric
+        const capacities = depotsWithMetrics.map(d => d.kapasite_db).filter(c => c > 0);
+        const prices = depotsWithMetrics.map(d => d.aylik_kira).filter(p => p > 0);
+        const distances = depotsWithMetrics.map(d => d.distance_km);
+        
+        const maxCapacity = Math.max(...capacities, 1);
+        const minCapacity = Math.min(...capacities, 0);
+        const maxPrice = Math.max(...prices, 1);
+        const minPrice = Math.min(...prices, 0);
+        const maxDistance = Math.max(...distances, 1);
+        const minDistance = Math.min(...distances, 0);
+        
+        // Calculate scores for each depot
+        // Weights: capacity 0.45, price 0.35, distance 0.20
+        const WEIGHT_CAPACITY = 0.45;
+        const WEIGHT_PRICE = 0.35;
+        const WEIGHT_DISTANCE = 0.20;
+        
+        const depotsWithScores = depotsWithMetrics.map(depot => {
+            // Normalize capacity (higher is better): (value - min) / (max - min)
+            const capacityRange = maxCapacity - minCapacity;
+            const normalizedCapacity = capacityRange > 0 
+                ? (depot.kapasite_db - minCapacity) / capacityRange 
+                : 0.5; // Default to middle if all same
+            
+            // Normalize price (lower is better): 1 - ((value - min) / (max - min))
+            const priceRange = maxPrice - minPrice;
+            const normalizedPrice = priceRange > 0 
+                ? 1 - ((depot.aylik_kira - minPrice) / priceRange)
+                : 0.5; // Default to middle if all same
+            
+            // Normalize distance (lower is better): 1 - ((value - min) / (max - min))
+            const distanceRange = maxDistance - minDistance;
+            const normalizedDistance = distanceRange > 0 
+                ? 1 - ((depot.distance_km - minDistance) / distanceRange)
+                : 0.5; // Default to middle if all same
+            
+            // Calculate weighted score
+            const score = (
+                normalizedCapacity * WEIGHT_CAPACITY +
+                normalizedPrice * WEIGHT_PRICE +
+                normalizedDistance * WEIGHT_DISTANCE
+            ) * 100; // Scale to 0-100 for readability
+            
+            return {
+                ...depot,
+                score: Math.round(score * 100) / 100 // Round to 2 decimals
+            };
+        });
+        
+        // Sort by score descending
+        depotsWithScores.sort((a, b) => b.score - a.score);
+        
+        // Remove temporary fields (enlem, boylam) from response
+        const result = depotsWithScores.map(({ enlem, boylam, ...rest }) => rest);
+        
+        console.log(`🏆 /api/en-uygun-depolar - Found ${result.length} depots, ranked by score`);
+        
+        return res.json({
+            success: true,
+            count: result.length,
+            data: result
+        });
+    } catch (error) {
+        console.error('❌ Error fetching best depots:', error.message);
+        console.error('❌ Full error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'En uygun depolar hesaplanırken bir hata oluştu.',
+            message: error.message
+        });
+    }
+});
+
+// ======================
 // Categories Endpoints
 // ======================
 
@@ -625,17 +875,23 @@ router.get('/urunler', async (req, res) => {
 
 /**
  * POST /api/urunler
- * Creates a new product in the database
- * Required fields: ad, kategori_id, birim_fiyat, hacim_db
+ * Creates a new product in the database and optionally creates/updates stock
+ * Required fields: ad, kategori_id, birim_fiyat, hacim_db, adet, lokasyon_id
  */
 router.post('/urunler', async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     
+    const pool = db.getPool();
+    const connection = await pool.getConnection();
+    
     try {
-        const { ad, kategori_id, birim_fiyat, hacim_db } = req.body;
+        await connection.beginTransaction();
+        
+        const { ad, kategori_id, birim_fiyat, hacim_db, adet, lokasyon_id } = req.body;
         
         // Validate required fields
         if (!ad || ad.trim() === '') {
+            await connection.rollback();
             return res.status(400).json({
                 success: false,
                 error: 'Ürün adı zorunludur.'
@@ -643,6 +899,7 @@ router.post('/urunler', async (req, res) => {
         }
         
         if (!kategori_id) {
+            await connection.rollback();
             return res.status(400).json({
                 success: false,
                 error: 'Kategori seçimi zorunludur.'
@@ -650,6 +907,7 @@ router.post('/urunler', async (req, res) => {
         }
         
         if (birim_fiyat === undefined || birim_fiyat === null || birim_fiyat < 0) {
+            await connection.rollback();
             return res.status(400).json({
                 success: false,
                 error: 'Geçerli bir birim fiyat girilmelidir.'
@@ -657,40 +915,122 @@ router.post('/urunler', async (req, res) => {
         }
         
         if (hacim_db === undefined || hacim_db === null || hacim_db < 0) {
+            await connection.rollback();
             return res.status(400).json({
                 success: false,
                 error: 'Geçerli bir depo birimi (hacim) girilmelidir.'
             });
         }
         
+        // Validate stock fields if provided
+        if (adet !== undefined && adet !== null) {
+            if (adet < 1 || !Number.isInteger(Number(adet))) {
+                await connection.rollback();
+                return res.status(400).json({
+                    success: false,
+                    error: 'Adet/Stok en az 1 olmalıdır ve tam sayı olmalıdır.'
+                });
+            }
+            
+            if (!lokasyon_id) {
+                await connection.rollback();
+                return res.status(400).json({
+                    success: false,
+                    error: 'Depo seçimi zorunludur (adet belirtildiğinde).'
+                });
+            }
+        }
+        
         // Insert new product
-        const sql = `
+        const insertProductSql = `
             INSERT INTO urunler (ad, kategori_id, birim_fiyat, hacim_db, kritik_stok, aktif_mi)
             VALUES (?, ?, ?, ?, 0, 1)
         `;
         
-        const result = await db.query(sql, [ad.trim(), kategori_id, birim_fiyat, hacim_db]);
+        const [productResult] = await connection.execute(insertProductSql, [
+            ad.trim(), 
+            kategori_id, 
+            birim_fiyat, 
+            hacim_db
+        ]);
         
-        console.log(`✅ /api/urunler POST - Created product: ${ad} (ID: ${result.insertId})`);
+        const urun_id = productResult.insertId;
+        
+        // If adet and lokasyon_id provided, create/update stock
+        if (adet !== undefined && adet !== null && lokasyon_id) {
+            const upsertStockSql = `
+                INSERT INTO stoklar (urun_id, lokasyon_id, miktar)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE miktar = miktar + VALUES(miktar)
+            `;
+            
+            await connection.execute(upsertStockSql, [urun_id, lokasyon_id, adet]);
+            
+            console.log(`📦 Stock created/updated: ${adet} units of product ${urun_id} in location ${lokasyon_id}`);
+        }
+        
+        // Commit transaction
+        await connection.commit();
+        
+        // Calculate updated occupancy for the selected location (if stock was added)
+        let locationOccupancy = null;
+        if (adet !== undefined && adet !== null && lokasyon_id) {
+            const occupancySql = `
+                SELECT
+                    l.lokasyon_id,
+                    l.ad,
+                    l.kullanilabilir_kapasite_db AS capacity_db,
+                    COALESCE(SUM(s.miktar * u.hacim_db), 0) AS used_db,
+                    CASE WHEN l.kullanilabilir_kapasite_db = 0 THEN 0
+                         ELSE ROUND((COALESCE(SUM(s.miktar * u.hacim_db), 0) / l.kullanilabilir_kapasite_db) * 100, 2)
+                    END AS doluluk_yuzde
+                FROM lokasyonlar l
+                LEFT JOIN stoklar s ON s.lokasyon_id = l.lokasyon_id
+                LEFT JOIN urunler u ON u.urun_id = s.urun_id AND u.aktif_mi = 1
+                WHERE l.lokasyon_id = ?
+                GROUP BY l.lokasyon_id
+            `;
+            
+            const [occupancyResult] = await db.query(occupancySql, [lokasyon_id]);
+            if (occupancyResult && occupancyResult.length > 0) {
+                locationOccupancy = {
+                    lokasyon_id: occupancyResult[0].lokasyon_id,
+                    ad: occupancyResult[0].ad,
+                    capacity_db: parseFloat(occupancyResult[0].capacity_db || 0),
+                    used_db: parseFloat(occupancyResult[0].used_db || 0),
+                    doluluk_yuzde: parseFloat(occupancyResult[0].doluluk_yuzde || 0)
+                };
+            }
+        }
+        
+        console.log(`✅ /api/urunler POST - Created product: ${ad} (ID: ${urun_id})`);
         
         return res.status(201).json({
             success: true,
             message: 'Ürün başarıyla eklendi.',
             data: {
-                urun_id: result.insertId,
+                urun_id: urun_id,
                 ad: ad.trim(),
                 kategori_id: kategori_id,
                 birim_fiyat: birim_fiyat,
-                hacim_db: hacim_db
+                hacim_db: hacim_db,
+                ...(adet !== undefined && lokasyon_id ? {
+                    adet: adet,
+                    lokasyon_id: lokasyon_id,
+                    location_occupancy: locationOccupancy
+                } : {})
             }
         });
     } catch (error) {
+        await connection.rollback();
         console.error('❌ Error creating product:', error.message);
         return res.status(500).json({
             success: false,
             error: 'Ürün eklenirken bir hata oluştu.',
             message: error.message
         });
+    } finally {
+        connection.release();
     }
 });
 
@@ -788,16 +1128,22 @@ router.put('/urunler/:id', async (req, res) => {
 
 /**
  * DELETE /api/urunler/:id
- * Hard deletes a product (removes the row from the database)
+ * Soft deletes a product by setting aktif_mi = 0 and removes current stock records
+ * Preserves historical sales data by not deleting from satislar table
  */
 router.delete('/urunler/:id', async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     
     const { id } = req.params;
+    const pool = db.getPool();
+    const connection = await pool.getConnection();
     
     try {
+        await connection.beginTransaction();
+        
         // Validate ID
         if (!id || isNaN(parseInt(id))) {
+            await connection.rollback();
             return res.status(400).json({
                 success: false,
                 error: 'Geçersiz ürün ID.'
@@ -805,10 +1151,11 @@ router.delete('/urunler/:id', async (req, res) => {
         }
         
         // Check if product exists and get its name for logging
-        const checkSql = 'SELECT urun_id, ad FROM urunler WHERE urun_id = ?';
-        const existing = await db.query(checkSql, [id]);
+        const checkSql = 'SELECT urun_id, ad, aktif_mi FROM urunler WHERE urun_id = ?';
+        const [existing] = await connection.execute(checkSql, [id]);
         
         if (existing.length === 0) {
+            await connection.rollback();
             return res.status(404).json({
                 success: false,
                 error: 'Ürün bulunamadı.'
@@ -817,35 +1164,65 @@ router.delete('/urunler/:id', async (req, res) => {
         
         const productName = existing[0].ad;
         
-        // Hard delete - remove the row from database
-        const deleteSql = 'DELETE FROM urunler WHERE urun_id = ?';
-        const result = await db.query(deleteSql, [id]);
+        // Soft delete: Set product as inactive
+        const softDeleteSql = 'UPDATE urunler SET aktif_mi = 0 WHERE urun_id = ?';
+        const [updateResult] = await connection.execute(softDeleteSql, [id]);
         
-        // Check if any row was actually deleted
-        if (result.affectedRows === 0) {
+        // Check if product was updated
+        if (updateResult.affectedRows === 0) {
+            await connection.rollback();
             return res.status(404).json({
                 success: false,
-                error: 'Ürün silinemedi.'
+                error: 'Ürün pasifleştirilemedi.'
             });
         }
         
-        console.log(`🗑️ /api/urunler DELETE - Hard deleted product: ${productName} (ID: ${id})`);
+        // Delete current stock records (safe to remove, preserves sales history)
+        const deleteStockSql = 'DELETE FROM stoklar WHERE urun_id = ?';
+        const [stockDeleteResult] = await connection.execute(deleteStockSql, [id]);
+        
+        // Check if depo_stoklari table exists and delete from there too
+        // Using a try-catch to handle gracefully if table doesn't exist
+        try {
+            const deleteDepoStockSql = 'DELETE FROM depo_stoklari WHERE urun_id = ?';
+            await connection.execute(deleteDepoStockSql, [id]);
+            console.log(`📦 Deleted stock from depo_stoklari for product ${id}`);
+        } catch (depoStockError) {
+            // Table might not exist, which is fine - just log and continue
+            if (depoStockError.code !== 'ER_NO_SUCH_TABLE') {
+                // If it's a different error, log it but don't fail the transaction
+                console.warn(`⚠️ Could not delete from depo_stoklari: ${depoStockError.message}`);
+            }
+        }
+        
+        // Commit transaction
+        await connection.commit();
+        
+        console.log(`🗑️ /api/urunler DELETE - Soft deleted product: ${productName} (ID: ${id}), removed ${stockDeleteResult.affectedRows} stock records`);
         
         return res.json({
             success: true,
-            message: 'Ürün başarıyla silindi.',
+            message: 'Ürün pasifleştirildi.',
             data: {
                 urun_id: parseInt(id),
-                ad: productName
+                ad: productName,
+                stock_records_deleted: stockDeleteResult.affectedRows
             }
         });
     } catch (error) {
+        await connection.rollback();
         console.error('❌ Error deleting product:', error.message);
+        console.error('❌ Full error:', error);
+        
+        // Return detailed error message
         return res.status(500).json({
             success: false,
             error: 'Ürün silinirken bir hata oluştu.',
-            message: error.message
+            message: error.message,
+            sqlError: error.code || null
         });
+    } finally {
+        connection.release();
     }
 });
 

@@ -1019,22 +1019,6 @@ body {
     justify-content: center;
 }
 
-.chart-container-compact {
-    position: relative;
-    height: 340px;
-    max-height: 340px;
-    background: var(--bg-page);
-    border: 2px dashed var(--border-light);
-    border-radius: var(--radius-md);
-    padding: var(--space-sm);
-    overflow: hidden;
-}
-
-.chart-container-compact canvas {
-    width: 100% !important;
-    height: 100% !important;
-}
-
 .stats-placeholder {
     min-height: 180px;
     display: flex;
@@ -1086,36 +1070,6 @@ body {
     font-style: italic;
     text-align: center;
     padding: var(--space-xl);
-}
-
-.chart-error {
-    color: #d14343;
-    font-size: 0.95rem;
-    font-weight: 600;
-    text-align: center;
-    padding: var(--space-md) var(--space-sm);
-}
-
-/* Analysis charts grid (analysis page) */
-.analysis-product-charts {
-    margin-bottom: var(--space-xxl);
-}
-
-.analysis-charts-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-lg);
-    align-items: stretch;
-}
-
-@media (max-width: 900px) {
-    .analysis-charts-grid {
-        grid-template-columns: 1fr;
-    }
-    .chart-container-compact {
-        height: 300px;
-        max-height: 300px;
-    }
 }
 
 /* Card header subtitle */
@@ -2774,5 +2728,365 @@ body {
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+/* =====================
+   Decision Panel Section
+   ===================== */
+
+.decision-panel-section {
+    margin-top: var(--space-xl);
+    margin-bottom: var(--space-xl);
+}
+
+.section-header-with-filter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-lg);
+    flex-wrap: wrap;
+    gap: var(--space-md);
+}
+
+.section-header-with-filter h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.filter-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.filter-select {
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-family: var(--font-main);
+    color: var(--text-primary);
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.filter-select:hover {
+    border-color: var(--color-primary-light);
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(10, 37, 64, 0.1);
+}
+
+.btn-filter-apply {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+/* KPI Row */
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-lg);
+}
+
+.card-kpi {
+    padding: var(--space-lg);
+    text-align: center;
+}
+
+.kpi-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.kpi-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.kpi-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.kpi-decision-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.decision-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.decision-safe {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #059669;
+}
+
+.decision-warning {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+}
+
+.decision-critical {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+}
+
+/* Charts Grid */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-lg);
+}
+
+.charts-grid-main {
+    margin-bottom: var(--space-lg);
+}
+
+.charts-grid-supporting {
+    margin-bottom: 0;
+}
+
+.card-chart {
+    min-height: 350px;
+}
+
+.card-header-chart {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.link-detail {
+    font-size: 0.875rem;
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color var(--transition-fast);
+    white-space: nowrap;
+}
+
+.link-detail:hover {
+    color: var(--color-primary-light);
+    text-decoration: underline;
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .kpi-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .section-header-with-filter {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .filter-bar {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+    
+    .kpi-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .kpi-value {
+        font-size: 1.5rem;
+    }
+    
+    .chart-container {
+        height: 250px;
+    }
+}
+
+/* Stock Preview Styles */
+.stock-preview {
+    background: rgba(10, 37, 64, 0.05);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    padding: var(--space-md);
+    margin-top: var(--space-sm);
+}
+
+.stock-preview-text {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+}
+
+.stock-preview-text:not(:last-child) {
+    margin-bottom: var(--space-xs);
+}
+
+.preview-label {
+    color: var(--text-secondary);
+}
+
+.preview-value {
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+/* Stock Preview Warning and Critical States */
+.stock-preview-text.preview-warning .preview-value {
+    color: var(--color-warning);
+}
+
+.stock-preview-text.preview-critical .preview-value {
+    color: var(--color-danger);
+}
+
+/* Best Depots Styles */
+.best-depots-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.best-depots-empty {
+    text-align: center;
+    padding: var(--space-xl);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.best-depots-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.best-depot-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    background: rgba(10, 37, 64, 0.03);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-fast);
+}
+
+.best-depot-item:hover {
+    background: rgba(10, 37, 64, 0.06);
+}
+
+.depot-rank {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-primary);
+    color: var(--text-inverse);
+    border-radius: var(--radius-full);
+    font-weight: 700;
+    font-size: 0.875rem;
+}
+
+.depot-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.depot-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    margin-bottom: var(--space-xs);
+}
+
+.depot-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    font-size: 0.85rem;
+}
+
+.depot-metrics .metric {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.depot-metrics .metric-label {
+    color: var(--text-secondary);
+}
+
+.depot-metrics .metric-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.depot-metrics .metric-value.score-value {
+    color: var(--color-primary);
+    font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+    .depot-metrics {
+        flex-direction: column;
+        gap: var(--space-xs);
+    }
+    
+    .best-depot-item {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+    
+    .depot-details {
+        width: 100%;
+    }
 }
 

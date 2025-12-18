@@ -47,16 +47,6 @@ const elements = {
     chartModeQuantity: document.getElementById('chart-mode-quantity'),
     // Monthly total ciro element
     monthlyCiroValue: document.getElementById('monthly-ciro-value'),
-    // Analysis charts (analysis page)
-    analysisQuantityChart: document.getElementById('analysis-quantity-chart'),
-    analysisRevenueChart: document.getElementById('analysis-revenue-chart'),
-    analysisQuantityLoading: document.getElementById('analysis-quantity-loading'),
-    analysisRevenueLoading: document.getElementById('analysis-revenue-loading'),
-    analysisQuantityError: document.getElementById('analysis-quantity-error'),
-    analysisRevenueError: document.getElementById('analysis-revenue-error'),
-    analysisTrendChart: document.getElementById('analysis-trend-chart'),
-    analysisTrendLoading: document.getElementById('analysis-trend-loading'),
-    analysisTrendError: document.getElementById('analysis-trend-error'),
     // Sales insights elements
     insightsLoading: document.getElementById('insights-loading'),
     insightsContent: document.getElementById('insights-content'),
@@ -121,6 +111,14 @@ const elements = {
     productCategorySelect: document.getElementById('product-category'),
     productHacimInput: document.getElementById('product-hacim'),
     productPriceInput: document.getElementById('product-price'),
+    productAdetInput: document.getElementById('product-adet'),
+    productLokasyonSelect: document.getElementById('product-lokasyon'),
+    stockPreviewGroup: document.getElementById('stock-preview-group'),
+    previewSpaceDb: document.getElementById('preview-space-db'),
+    previewOccupancyPercent: document.getElementById('preview-occupancy-percent'),
+    previewTotalOccupancyPercent: document.getElementById('preview-total-occupancy-percent'),
+    stockPreviewTotalOccupancy: document.getElementById('stock-preview-total-occupancy'),
+    lokasyonErrorMessage: document.getElementById('lokasyon-error-message'),
     formErrorMessage: document.getElementById('form-error-message'),
     formSuccessMessage: document.getElementById('form-success-message'),
     // DB Examples panel elements
@@ -157,6 +155,10 @@ let productsLoaded = false;
 let categoriesLoaded = false;
 let categoriesData = [];
 
+// Track if locations have been loaded
+let locationsLoaded = false;
+let locationsData = [];
+
 // Track product being edited/deleted
 let currentEditProductId = null;
 let currentEditProductName = '';
@@ -164,17 +166,16 @@ let currentEditProductName = '';
 // Chart.js instance for sales revenue chart
 let salesRevenueChartInstance = null;
 
+// Chart.js instances for Decision Panel
+let revenueTrendChartInstance = null;
+let topProductsSpaceChartInstance = null;
+let capacityForecastChartInstance = null;
+
 // Sales chart mode: 'revenue' or 'quantity'
 let salesChartMode = 'revenue';
 
 // Raw sales data from API (to allow re-sorting without refetching)
 let salesChartRawData = [];
-
-// Analysis page chart instances and cache
-let analysisQuantityChartInstance = null;
-let analysisRevenueChartInstance = null;
-let analysisChartData = [];
-let analysisTrendChartInstance = null;
 
 // Cached utilization data (to share between dashboard and analysis section)
 let cachedUtilizationData = null;
@@ -214,8 +215,6 @@ function showAnalysisSection() {
         
         // Load utilization for the analysis section
         loadStoreUtilization('analysis');
-        loadAnalysisProductCharts();
-        loadAnalysisRevenueTrend();
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -244,389 +243,6 @@ function showProductsSection() {
  */
 function runAnalysis() {
     showAnalysisSection();
-}
-
-// ======================
-// Analysis Page Product Charts (Map View)
-// ======================
-
-/**
- * Set chart visibility state for analysis charts
- * @param {HTMLElement} loadingEl
- * @param {HTMLElement} errorEl
- * @param {HTMLCanvasElement} canvasEl
- * @param {'loading'|'error'|'ready'} state
- * @param {string} [message]
- */
-function setAnalysisChartState(loadingEl, errorEl, canvasEl, state, message = '') {
-    if (loadingEl) {
-        loadingEl.classList.toggle('hidden', state !== 'loading');
-    }
-    if (errorEl) {
-        if (message) {
-            errorEl.textContent = message;
-        }
-        errorEl.classList.toggle('hidden', state !== 'error');
-    }
-    if (canvasEl) {
-        canvasEl.classList.toggle('hidden', state !== 'ready');
-    }
-}
-
-/**
- * Show loading state on both analysis charts
- */
-function showAnalysisChartsLoading() {
-    setAnalysisChartState(elements.analysisQuantityLoading, elements.analysisQuantityError, elements.analysisQuantityChart, 'loading');
-    setAnalysisChartState(elements.analysisRevenueLoading, elements.analysisRevenueError, elements.analysisRevenueChart, 'loading');
-}
-
-/**
- * Show error state on both analysis charts
- * @param {string} message
- */
-function showAnalysisChartError(message = 'Veriler yüklenemedi.') {
-    setAnalysisChartState(elements.analysisQuantityLoading, elements.analysisQuantityError, elements.analysisQuantityChart, 'error', message);
-    setAnalysisChartState(elements.analysisRevenueLoading, elements.analysisRevenueError, elements.analysisRevenueChart, 'error', message);
-}
-
-/**
- * Load product performance charts for analysis page using existing sales-details endpoint
- */
-async function loadAnalysisProductCharts() {
-    showAnalysisChartsLoading();
-    const month = getCurrentMonth();
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/sales-details?month=${month}`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (!data.success || !Array.isArray(data.items) || data.items.length === 0) {
-            throw new Error('NO_DATA');
-        }
-
-        analysisChartData = data.items;
-        renderAnalysisProductCharts();
-    } catch (error) {
-        console.error('❌ Analysis product chart load error:', error);
-        analysisChartData = [];
-        showAnalysisChartError('Veriler yüklenemedi.');
-    }
-}
-
-/**
- * Render quantity and revenue charts for analysis page
- */
-function renderAnalysisProductCharts() {
-    if (!analysisChartData || analysisChartData.length === 0) {
-        showAnalysisChartError('Veriler yüklenemedi.');
-        return;
-    }
-
-    const topQuantity = [...analysisChartData]
-        .sort((a, b) => parseInt(b.toplam_adet || 0) - parseInt(a.toplam_adet || 0))
-        .slice(0, 10);
-
-    const topRevenue = [...analysisChartData]
-        .sort((a, b) => parseFloat(b.toplam_tutar || 0) - parseFloat(a.toplam_tutar || 0))
-        .slice(0, 10);
-
-    renderAnalysisBarChart({
-        items: topQuantity,
-        mode: 'quantity',
-        canvas: elements.analysisQuantityChart,
-        loadingEl: elements.analysisQuantityLoading,
-        errorEl: elements.analysisQuantityError
-    });
-
-    renderAnalysisBarChart({
-        items: topRevenue,
-        mode: 'revenue',
-        canvas: elements.analysisRevenueChart,
-        loadingEl: elements.analysisRevenueLoading,
-        errorEl: elements.analysisRevenueError
-    });
-}
-
-/**
- * Render a single analysis bar chart
- * @param {Object} params
- * @param {Array} params.items
- * @param {'quantity'|'revenue'} params.mode
- * @param {HTMLCanvasElement} params.canvas
- * @param {HTMLElement} params.loadingEl
- * @param {HTMLElement} params.errorEl
- */
-function renderAnalysisBarChart({ items, mode, canvas, loadingEl, errorEl }) {
-    if (!canvas || !items || items.length === 0) {
-        setAnalysisChartState(loadingEl, errorEl, canvas, 'error', 'Veriler yüklenemedi.');
-        return;
-    }
-
-    setAnalysisChartState(loadingEl, errorEl, canvas, 'ready');
-
-    const baseNames = items.map(item => item.urun_adi || item.ad || 'Ürün');
-    const labels =baseNames;
-    const dataValues = mode === 'revenue'
-        ? items.map(item => parseFloat(item.toplam_tutar || 0))
-        : items.map(item => parseInt(item.toplam_adet || 0));
-
-    const palette = mode === 'revenue'
-        ? { bar: '#13A865', hover: '#0d8a50', border: 'rgba(19, 168, 101, 0.25)' }
-        : { bar: '#0F2038', hover: '#1a3a5c', border: 'rgba(15, 32, 56, 0.2)' };
-
-    if (mode === 'revenue' && analysisRevenueChartInstance) {
-        analysisRevenueChartInstance.destroy();
-    }
-    if (mode === 'quantity' && analysisQuantityChartInstance) {
-        analysisQuantityChartInstance.destroy();
-    }
-
-    const chartInstance = new Chart(canvas.getContext('2d'), {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [{
-                label: mode === 'revenue' ? 'Ciro (₺)' : 'Satış Adedi',
-                data: dataValues,
-                backgroundColor: palette.bar,
-                hoverBackgroundColor: palette.hover,
-                borderColor: palette.border,
-                borderWidth: 1.5,
-                borderRadius: 6,
-                maxBarThickness: 44
-            }]
-        },
-        options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: 'rgba(10, 37, 64, 0.95)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#ffffff',
-                    padding: 12,
-                    callbacks: {
-                        title: (context) => labels[context[0].dataIndex],
-                        label: (context) => mode === 'revenue'
-                            ? formatCurrencyTL(context.parsed.x)
-                            : `${formatNumber(context.parsed.x)} adet`
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#64748b',
-                        callback: (value) => mode === 'revenue'
-                            ? formatRevenueTick(value)
-                            : formatQuantityTick(value)
-                    },
-                    grid: {
-                        color: 'rgba(226, 232, 240, 0.8)'
-                    }
-                },
-                y: {
-                    ticks: {
-                        color: '#64748b',
-                        autoSkip: false,
-                        callback: function(value) {
-                            const label = this.getLabelForValue(value) || '';
-                            return label.replace(/\s*#\d+/, '').trim();
-                        }
-                    },
-                    grid: { display: false }
-                }
-            }
-        }
-    });
-
-    if (mode === 'revenue') {
-        analysisRevenueChartInstance = chartInstance;
-    } else {
-        analysisQuantityChartInstance = chartInstance;
-    }
-}
-
-/**
- * Format revenue tick values for Y axis
- * @param {number} value
- * @returns {string}
- */
-function formatRevenueTick(value) {
-    if (value >= 1000000) {
-        return `${(value / 1000000).toFixed(1)}M ₺`;
-    }
-    if (value >= 1000) {
-        return `${(value / 1000).toFixed(0)}K ₺`;
-    }
-    return `${formatNumber(value)} ₺`;
-}
-
-/**
- * Format quantity tick values for Y axis
- * @param {number} value
- * @returns {string}
- */
-function formatQuantityTick(value) {
-    if (value >= 1000000) {
-        return `${(value / 1000000).toFixed(1)}M`;
-    }
-    if (value >= 1000) {
-        return `${(value / 1000).toFixed(0)}K`;
-    }
-    return formatNumber(value);
-}
-
-/**
- * Load last 6 months revenue trend
- */
-async function loadAnalysisRevenueTrend() {
-    if (!elements.analysisTrendChart) return;
-
-    setTrendChartState('loading');
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/analytics/revenue-trend?months=6`);
-        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-        const data = await response.json();
-        if (!data.success || !Array.isArray(data.data)) {
-            throw new Error('Geçersiz veri');
-        }
-
-        const trend = normalizeTrendData(data.data, 6);
-        renderAnalysisTrendChart(trend);
-    } catch (error) {
-        console.error('❌ Trend data error:', error);
-        setTrendChartState('error', 'Veriler yüklenemedi.');
-    }
-}
-
-/**
- * Normalize trend data to last N months, filling missing with 0
- * @param {Array} rows
- * @param {number} monthsCount
- */
-function normalizeTrendData(rows, monthsCount) {
-    const map = new Map();
-    rows.forEach(r => {
-        map.set(r.ym, parseFloat(r.revenue || 0));
-    });
-
-    const labels = [];
-    const values = [];
-    const today = new Date();
-    const shortMonths = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
-
-    for (let i = monthsCount - 1; i >= 0; i--) {
-        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-        const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const label = `${shortMonths[d.getMonth()]} ${d.getFullYear()}`;
-        labels.push(label);
-        values.push(map.get(ym) || 0);
-    }
-
-    return { labels, values };
-}
-
-/**
- * Set trend chart UI state
- * @param {'loading'|'error'|'ready'} state
- * @param {string} [message]
- */
-function setTrendChartState(state, message = '') {
-    if (elements.analysisTrendLoading) {
-        elements.analysisTrendLoading.classList.toggle('hidden', state !== 'loading');
-    }
-    if (elements.analysisTrendError) {
-        if (message) elements.analysisTrendError.textContent = message;
-        elements.analysisTrendError.classList.toggle('hidden', state !== 'error');
-    }
-    if (elements.analysisTrendChart) {
-        elements.analysisTrendChart.classList.toggle('hidden', state !== 'ready');
-    }
-}
-
-/**
- * Render revenue trend line chart
- * @param {{labels:string[], values:number[]}} data
- */
-function renderAnalysisTrendChart(data) {
-    if (!data || !data.labels || !data.values) {
-        setTrendChartState('error', 'Veriler yüklenemedi.');
-        return;
-    }
-
-    setTrendChartState('ready');
-
-    if (analysisTrendChartInstance) {
-        analysisTrendChartInstance.destroy();
-    }
-
-    const ctx = elements.analysisTrendChart.getContext('2d');
-
-    analysisTrendChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.labels,
-            datasets: [{
-                label: 'Toplam Ciro (₺)',
-                data: data.values,
-                borderColor: '#0F2038',
-                backgroundColor: 'rgba(15, 32, 56, 0.12)',
-                borderWidth: 3,
-                pointBackgroundColor: '#0F2038',
-                pointBorderColor: '#ffffff',
-                pointBorderWidth: 2,
-                pointRadius: 5,
-                pointHoverRadius: 7,
-                pointHoverBackgroundColor: '#1a3a5c',
-                fill: true,
-                tension: 0.25
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: 'rgba(10, 37, 64, 0.95)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#ffffff',
-                    padding: 12,
-                    callbacks: {
-                        label: (context) => formatCurrencyTL(context.parsed.y)
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    ticks: {
-                        color: '#64748b'
-                    },
-                    grid: { display: false }
-                },
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#64748b',
-                        callback: (value) => formatRevenueTick(value)
-                    },
-                    grid: {
-                        color: 'rgba(226, 232, 240, 0.8)'
-                    }
-                }
-            }
-        }
-    });
 }
 
 // ======================
@@ -1120,26 +736,41 @@ async function loadSalesDetailsChart(month) {
     updateMonthlyCiro(null, true); // Show loading for ciro
     
     try {
-        const response = await fetch(`${API_BASE_URL}/sales-details?month=${month}`);
+        // Fetch chart data (Top-10 products) and monthly revenue (full total) in parallel
+        const [chartResponse, revenueResponse] = await Promise.all([
+            fetch(`${API_BASE_URL}/sales-details?month=${month}`),
+            fetch(`${API_BASE_URL}/monthly-revenue?month=${month}`)
+        ]);
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        if (!chartResponse.ok) {
+            throw new Error(`HTTP error! status: ${chartResponse.status}`);
         }
         
-        const data = await response.json();
+        const chartData = await chartResponse.json();
         
-        if (data.success && data.items && data.items.length > 0) {
+        // Handle chart data
+        if (chartData.success && chartData.items && chartData.items.length > 0) {
             // Store raw data for re-sorting when mode changes
-            salesChartRawData = data.items;
+            salesChartRawData = chartData.items;
             renderSalesChart();
-            
-            // Calculate and display total ciro
-            const totalCiro = data.items.reduce((sum, item) => sum + parseFloat(item.toplam_tutar || 0), 0);
-            updateMonthlyCiro(totalCiro);
         } else {
             salesChartRawData = [];
             showChartNoData();
-            updateMonthlyCiro(0);
+        }
+        
+        // Handle monthly revenue (full total from dedicated endpoint)
+        if (revenueResponse.ok) {
+            const revenueData = await revenueResponse.json();
+            if (revenueData.success && revenueData.monthly_total !== undefined) {
+                updateMonthlyCiro(revenueData.monthly_total);
+            } else {
+                updateMonthlyCiro(0);
+            }
+        } else {
+            console.warn('⚠️ Monthly revenue endpoint failed, falling back to chart total');
+            // Fallback: calculate from chart data if revenue endpoint fails
+            const fallbackTotal = salesChartRawData.reduce((sum, item) => sum + parseFloat(item.toplam_tutar || 0), 0);
+            updateMonthlyCiro(fallbackTotal);
         }
     } catch (error) {
         console.error('❌ Error loading sales details:', error);
@@ -1928,6 +1559,11 @@ function openAddProductModal() {
             loadCategories();
         }
         
+        // Load locations if not already loaded
+        if (!locationsLoaded) {
+            loadLocations();
+        }
+        
         // Reset form
         resetAddProductForm();
         
@@ -1958,8 +1594,15 @@ function resetAddProductForm() {
     if (elements.productHacimInput) {
         elements.productHacimInput.value = '0.10';
     }
+    if (elements.productAdetInput) {
+        elements.productAdetInput.value = '1';
+    }
+    if (elements.productLokasyonSelect) {
+        elements.productLokasyonSelect.value = '';
+    }
     hideFormMessages();
     hideDbExamplesPanel();
+    updateStockPreview(); // Reset preview
 }
 
 /**
@@ -2026,6 +1669,176 @@ function showFormSuccess(message) {
     if (elements.formSuccessMessage) {
         elements.formSuccessMessage.textContent = message;
         elements.formSuccessMessage.classList.remove('hidden');
+    }
+}
+
+/**
+ * Load locations from API
+ */
+async function loadLocations() {
+    if (!elements.productLokasyonSelect) return;
+    
+    hideLokasyonError();
+    showLokasyonLoadingOption(elements.productLokasyonSelect);
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/lokasyonlar`);
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('API bağlantı hatası');
+        }
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Lokasyonlar yüklenemedi');
+        }
+        
+        if (data.success && data.data) {
+            locationsData = data.data;
+            populateLocationDropdown(locationsData);
+            locationsLoaded = true;
+            
+            // Default select the first 'magaza' location (main store)
+            const mainStore = locationsData.find(loc => loc.tur === 'magaza');
+            if (mainStore && elements.productLokasyonSelect) {
+                elements.productLokasyonSelect.value = mainStore.lokasyon_id;
+                updateStockPreview();
+            }
+        }
+    } catch (error) {
+        console.error('❌ Locations loading error:', error);
+        showLokasyonError('Lokasyonlar yüklenemedi.');
+        locationsLoaded = false;
+    }
+}
+
+/**
+ * Populate the location dropdown with options
+ * @param {Array} locations - Array of location objects
+ */
+function populateLocationDropdown(locations) {
+    if (!elements.productLokasyonSelect) return;
+    
+    elements.productLokasyonSelect.innerHTML = '<option value="">Depo seçin...</option>';
+    
+    locations.forEach(location => {
+        const option = document.createElement('option');
+        option.value = location.lokasyon_id;
+        option.textContent = `${location.ad} (${location.tur === 'magaza' ? 'Mağaza' : 'Depo'})`;
+        // Use kapasite_db (preferred) or fallback to kullanilabilir_kapasite_db
+        option.dataset.capacity = location.kapasite_db || location.kullanilabilir_kapasite_db || 0;
+        option.dataset.usedDb = location.used_db || 0;
+        option.dataset.dolulukYuzde = location.doluluk_yuzde || 0;
+        elements.productLokasyonSelect.appendChild(option);
+    });
+}
+
+/**
+ * Show loading option in location select
+ */
+function showLokasyonLoadingOption(selectEl) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '<option value="" disabled selected>Depolar yükleniyor...</option>';
+}
+
+/**
+ * Show location error
+ */
+function showLokasyonError(message) {
+    if (elements.lokasyonErrorMessage) {
+        elements.lokasyonErrorMessage.textContent = message || 'Lokasyonlar yüklenemedi.';
+        elements.lokasyonErrorMessage.classList.remove('hidden');
+    }
+}
+
+/**
+ * Hide location error
+ */
+function hideLokasyonError() {
+    if (elements.lokasyonErrorMessage) {
+        elements.lokasyonErrorMessage.classList.add('hidden');
+    }
+}
+
+/**
+ * Update stock preview based on current form values
+ * Shows:
+ * 1. Product's own occupancy percentage
+ * 2. Total warehouse occupancy after adding this product
+ */
+function updateStockPreview() {
+    if (!elements.stockPreviewGroup || !elements.previewSpaceDb || !elements.previewOccupancyPercent || !elements.previewTotalOccupancyPercent) {
+        return;
+    }
+    
+    const adet = parseFloat(elements.productAdetInput?.value) || 0;
+    const hacimDb = parseFloat(elements.productHacimInput?.value) || 0;
+    const lokasyonId = elements.productLokasyonSelect?.value;
+    
+    // Show preview only if all required values are present
+    if (adet > 0 && hacimDb > 0 && lokasyonId) {
+        const selectedOption = elements.productLokasyonSelect?.selectedOptions[0];
+        if (!selectedOption) {
+            elements.stockPreviewGroup.style.display = 'none';
+            return;
+        }
+        
+        // Calculate product DB (this product only)
+        const productDb = adet * hacimDb;
+        const capacityDb = parseFloat(selectedOption.dataset.capacity || 0);
+        const currentUsedDb = parseFloat(selectedOption.dataset.usedDb || 0);
+        
+        // Update space preview
+        elements.previewSpaceDb.textContent = formatDbValue(productDb) + ' DB';
+        
+        // Calculate product occupancy percentage: (product_db / kapasite_db) * 100
+        if (capacityDb > 0) {
+            const occupancyPercent = (productDb / capacityDb) * 100;
+            // Round to 2 decimals
+            const roundedPercent = Math.round(occupancyPercent * 100) / 100;
+            elements.previewOccupancyPercent.textContent = `%${roundedPercent.toFixed(2)}`;
+        } else {
+            // Show error message if capacity is missing or 0
+            elements.previewOccupancyPercent.textContent = 'Depo kapasitesi hesaplanamadı';
+        }
+        
+        // Calculate total occupancy after adding this product
+        if (capacityDb > 0) {
+            const totalUsedDbAfter = currentUsedDb + productDb;
+            const totalOccupancyPercent = (totalUsedDbAfter / capacityDb) * 100;
+            // Round to 2 decimals
+            const roundedTotalPercent = Math.round(totalOccupancyPercent * 100) / 100;
+            
+            // Update text content
+            elements.previewTotalOccupancyPercent.textContent = `%${roundedTotalPercent.toFixed(2)}`;
+            
+            // Apply visual styling based on occupancy level
+            if (elements.stockPreviewTotalOccupancy) {
+                // Remove all state classes first
+                elements.stockPreviewTotalOccupancy.classList.remove('preview-warning', 'preview-critical');
+                
+                if (roundedTotalPercent > 85) {
+                    // Critical: >85%
+                    elements.stockPreviewTotalOccupancy.classList.add('preview-critical');
+                } else if (roundedTotalPercent >= 70) {
+                    // Warning: 70-85%
+                    elements.stockPreviewTotalOccupancy.classList.add('preview-warning');
+                }
+                // Normal: <70% (no class needed, uses default styling)
+            }
+        } else {
+            // Show error message if capacity is missing or 0
+            elements.previewTotalOccupancyPercent.textContent = 'Toplam doluluk hesaplanamadı';
+            if (elements.stockPreviewTotalOccupancy) {
+                elements.stockPreviewTotalOccupancy.classList.remove('preview-warning', 'preview-critical');
+            }
+        }
+        
+        elements.stockPreviewGroup.style.display = 'block';
+    } else {
+        elements.stockPreviewGroup.style.display = 'none';
     }
 }
 
@@ -2153,6 +1966,8 @@ async function handleAddProductSubmit(event) {
     const categoryId = elements.productCategorySelect?.value;
     const hacimDb = parseFloat(elements.productHacimInput?.value) || 0;
     const birimFiyat = parseFloat(elements.productPriceInput?.value) || 0;
+    const adet = parseInt(elements.productAdetInput?.value) || 0;
+    const lokasyonId = elements.productLokasyonSelect?.value;
     
     // Validate
     if (!productName) {
@@ -2185,6 +2000,18 @@ async function handleAddProductSubmit(event) {
         return;
     }
     
+    if (adet < 1 || !Number.isInteger(adet)) {
+        showFormError('Adet/Stok en az 1 olmalıdır ve tam sayı olmalıdır.');
+        elements.productAdetInput?.focus();
+        return;
+    }
+    
+    if (!lokasyonId) {
+        showFormError('Depo seçimi zorunludur.');
+        elements.productLokasyonSelect?.focus();
+        return;
+    }
+    
     // Disable save button while submitting
     if (elements.modalSaveBtn) {
         elements.modalSaveBtn.disabled = true;
@@ -2201,7 +2028,9 @@ async function handleAddProductSubmit(event) {
                 ad: productName,
                 kategori_id: parseInt(categoryId),
                 hacim_db: hacimDb,
-                birim_fiyat: birimFiyat
+                birim_fiyat: birimFiyat,
+                adet: adet,
+                lokasyon_id: parseInt(lokasyonId)
             })
         });
         
@@ -2222,6 +2051,12 @@ async function handleAddProductSubmit(event) {
             // Refresh products list
             productsLoaded = false;
             loadProducts();
+            
+            // Refresh store utilization if stock was added
+            if (data.data.location_occupancy) {
+                cachedUtilizationData = null; // Clear cache to force refresh
+                loadStoreUtilization();
+            }
             
             // Close modal after a short delay
             setTimeout(() => {
@@ -2854,6 +2689,17 @@ function initEventListeners() {
         elements.salesDetailsMonthSelect.addEventListener('change', onSalesDetailsMonthChange);
     }
 
+    // Decision Panel filter apply button (placeholder - no backend call yet)
+    const decisionPanelApplyBtn = document.getElementById('decision-panel-apply-btn');
+    if (decisionPanelApplyBtn) {
+        decisionPanelApplyBtn.addEventListener('click', () => {
+            const year = document.getElementById('decision-panel-year')?.value;
+            const month = document.getElementById('decision-panel-month')?.value;
+            console.log(`Decision Panel filter: Year ${year}, Month ${month}`);
+            // TODO: Wire to backend API when endpoints are available
+        });
+    }
+
     // Chart mode toggle buttons
     if (elements.chartModeRevenue) {
         elements.chartModeRevenue.addEventListener('click', () => switchChartMode('revenue'));
@@ -2897,6 +2743,17 @@ function initEventListeners() {
     // Category selection change handler
     if (elements.productCategorySelect) {
         elements.productCategorySelect.addEventListener('change', onCategoryChange);
+    }
+    
+    // Stock preview update handlers
+    if (elements.productAdetInput) {
+        elements.productAdetInput.addEventListener('input', updateStockPreview);
+    }
+    if (elements.productHacimInput) {
+        elements.productHacimInput.addEventListener('input', updateStockPreview);
+    }
+    if (elements.productLokasyonSelect) {
+        elements.productLokasyonSelect.addEventListener('change', updateStockPreview);
     }
 
     // Add Product form submission
@@ -2981,6 +2838,297 @@ function initEventListeners() {
 }
 
 // ======================
+// Decision Panel Functions
+// ======================
+
+/**
+ * Load and render best depots from API
+ */
+async function loadBestDepots() {
+    const loadingEl = document.getElementById('best-depots-loading');
+    const contentEl = document.getElementById('best-depots-content');
+    const emptyEl = document.getElementById('best-depots-empty');
+    
+    let hasData = false;
+    
+    // Show loading state initially
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (contentEl) contentEl.classList.add('hidden');
+    if (emptyEl) emptyEl.classList.add('hidden');
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/en-uygun-depolar`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.data && data.data.length > 0) {
+            // Show top 3 depots
+            const topDepots = data.data.slice(0, 3);
+            renderBestDepots(topDepots);
+            hasData = true;
+        } else {
+            hasData = false;
+        }
+    } catch (error) {
+        console.error('❌ Error loading best depots:', error);
+        hasData = false;
+    } finally {
+        // Always hide loading after fetch completes
+        if (loadingEl) loadingEl.classList.add('hidden');
+        
+        // Update UI based on final state
+        if (hasData) {
+            // Data exists: show content
+            if (contentEl) contentEl.classList.remove('hidden');
+            if (emptyEl) emptyEl.classList.add('hidden');
+        } else {
+            // No data: show empty state
+            if (contentEl) contentEl.classList.add('hidden');
+            if (emptyEl) emptyEl.classList.remove('hidden');
+        }
+    }
+}
+
+/**
+ * Render best depots list
+ * @param {Array} depots - Array of depot objects from API
+ */
+function renderBestDepots(depots) {
+    const contentEl = document.getElementById('best-depots-content');
+    if (!contentEl) return;
+    
+    let html = '<div class="best-depots-list">';
+    
+    depots.forEach((depot, index) => {
+        const rank = index + 1;
+        const depoAdi = escapeHtml(depot.depo_adi);
+        const distanceKm = depot.distance_km ? depot.distance_km.toFixed(2) : '—';
+        const kapasiteDb = depot.kapasite_db ? formatDbValue(depot.kapasite_db) : '—';
+        const aylikKira = depot.aylik_kira ? formatCurrencyTL(depot.aylik_kira) : '—';
+        const score = depot.score ? depot.score.toFixed(2) : '—';
+        
+        html += `
+            <div class="best-depot-item">
+                <div class="depot-rank">${rank}</div>
+                <div class="depot-details">
+                    <div class="depot-name">${depoAdi}</div>
+                    <div class="depot-metrics">
+                        <span class="metric">
+                            <span class="metric-label">Mesafe:</span>
+                            <span class="metric-value">${distanceKm} km</span>
+                        </span>
+                        <span class="metric">
+                            <span class="metric-label">Kapasite:</span>
+                            <span class="metric-value">${kapasiteDb} DB</span>
+                        </span>
+                        <span class="metric">
+                            <span class="metric-label">Kira:</span>
+                            <span class="metric-value">${aylikKira} / ay</span>
+                        </span>
+                        <span class="metric">
+                            <span class="metric-label">Uygunluk skoru:</span>
+                            <span class="metric-value score-value">${score}/100</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    contentEl.innerHTML = html;
+}
+
+/**
+ * Initialize Decision Panel charts with static demo data
+ * TODO: Wire to actual API endpoints when available
+ */
+function initDecisionPanelCharts() {
+    // Revenue Trend Chart (Line)
+    const revenueTrendCanvas = document.getElementById('revenue-trend-chart');
+    if (revenueTrendCanvas && typeof Chart !== 'undefined') {
+        const ctx = revenueTrendCanvas.getContext('2d');
+        // Static demo data: Last 6 months revenue trend
+        const revenueLabels = ['Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım'];
+        const revenueData = [150000, 180000, 165000, 210000, 195000, 192830];
+        
+        revenueTrendChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: revenueLabels,
+                datasets: [{
+                    label: 'Aylık Ciro (₺)',
+                    data: revenueData,
+                    borderColor: '#13A865',
+                    backgroundColor: 'rgba(19, 168, 101, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 5,
+                    pointBackgroundColor: '#13A865',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(10, 37, 64, 0.95)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        callbacks: {
+                            label: function(context) {
+                                return formatCurrencyTL(context.parsed.y);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        ticks: {
+                            callback: function(value) {
+                                if (value >= 1000) {
+                                    return (value / 1000).toFixed(0) + 'K ₺';
+                                }
+                                return value + ' ₺';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Load best depots (replaces warehouse comparison chart)
+    loadBestDepots();
+    
+    // Top Products by Space Chart (Horizontal Bar)
+    const topProductsSpaceCanvas = document.getElementById('top-products-space-chart');
+    if (topProductsSpaceCanvas && typeof Chart !== 'undefined') {
+        const ctx = topProductsSpaceCanvas.getContext('2d');
+        // Static demo data: Top 5 products by space consumption
+        const productLabels = ['E27 Büyük Ampul', 'Uzatma Kablolu Priz', 'TV Kumandası', 'Musluk Bataryası', 'Dekoratif Armatür'];
+        const productData = [45.2, 38.5, 28.3, 22.1, 18.7];
+        
+        topProductsSpaceChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: productLabels.map(label => truncateLabel(label, 20)),
+                datasets: [{
+                    label: 'Toplam Alan (DB)',
+                    data: productData,
+                    backgroundColor: '#0F2038',
+                    borderColor: '#1a3a5c',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(10, 37, 64, 0.95)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        callbacks: {
+                            title: function(context) {
+                                return productLabels[context[0].dataIndex];
+                            },
+                            label: function(context) {
+                                return `${context.parsed.x.toFixed(1)} DB`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toFixed(1) + ' DB';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Capacity Forecast Chart (Line)
+    const capacityForecastCanvas = document.getElementById('capacity-forecast-chart');
+    if (capacityForecastCanvas && typeof Chart !== 'undefined') {
+        const ctx = capacityForecastCanvas.getContext('2d');
+        // Static demo data: 3-month capacity forecast
+        const forecastLabels = ['Ocak 2026', 'Şubat 2026', 'Mart 2026'];
+        const forecastData = [68, 72, 78];
+        
+        capacityForecastChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: forecastLabels,
+                datasets: [{
+                    label: 'Tahmini Doluluk (%)',
+                    data: forecastData,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#f59e0b',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(10, 37, 64, 0.95)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        callbacks: {
+                            label: function(context) {
+                                return `Tahmini: ${context.parsed.y}%`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// ======================
 // Initialization
 // ======================
 
@@ -2996,6 +3144,9 @@ function init() {
 
     // Load store utilization on dashboard
     loadStoreUtilization();
+    
+    // Initialize Decision Panel charts with static demo data
+    initDecisionPanelCharts();
     
 }
 

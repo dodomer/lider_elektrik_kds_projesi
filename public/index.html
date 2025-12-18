@@ -183,6 +183,134 @@
 
             </div>
 
+            <!-- Karar Paneli (Yönetici Özeti) Section -->
+            <section class="decision-panel-section" id="decision-panel-section">
+                <div class="section-header-with-filter">
+                    <h2>Karar Paneli (Yönetici Özeti)</h2>
+                    <div class="filter-bar">
+                        <!-- TODO: Populate year options dynamically from available data in the database -->
+                        <select id="decision-panel-year" class="filter-select">
+                            <option value="2025" selected>2025</option>
+                        </select>
+                        <select id="decision-panel-month" class="filter-select">
+                            <option value="12" selected>Aralık</option>
+                            <option value="11">Kasım</option>
+                            <option value="10">Ekim</option>
+                            <option value="9">Eylül</option>
+                            <option value="8">Ağustos</option>
+                            <option value="7">Temmuz</option>
+                        </select>
+                        <button type="button" class="btn-secondary btn-filter-apply" id="decision-panel-apply-btn">
+                            Uygula
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI Row -->
+                <div class="kpi-row">
+                    <div class="card card-kpi">
+                        <div class="kpi-content">
+                            <span class="kpi-label">Toplam Aylık Ciro</span>
+                            <span class="kpi-value" id="kpi-monthly-revenue">—</span>
+                        </div>
+                    </div>
+                    <div class="card card-kpi">
+                        <div class="kpi-content">
+                            <span class="kpi-label">Satış Adedi</span>
+                            <span class="kpi-value" id="kpi-sales-count">—</span>
+                        </div>
+                    </div>
+                    <div class="card card-kpi">
+                        <div class="kpi-content">
+                            <span class="kpi-label">Kritik Dolulukta Depo</span>
+                            <span class="kpi-value" id="kpi-critical-warehouses">—</span>
+                        </div>
+                    </div>
+                    <div class="card card-kpi">
+                        <div class="kpi-content">
+                            <span class="kpi-label">KDS Kararı</span>
+                            <div class="kpi-decision-wrapper">
+                                <span class="kpi-value" id="kpi-decision-status">—</span>
+                                <span class="decision-badge decision-safe" id="kpi-decision-badge">Uygun</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Charts Row -->
+                <div class="charts-grid charts-grid-main">
+                    <div class="card card-chart">
+                        <div class="card-header card-header-chart">
+                            <div class="card-header-left">
+                                <span class="card-icon">📈</span>
+                                <h3>Son 6 Ay Ciro Trendi</h3>
+                            </div>
+                            <a href="#" class="link-detail" id="link-revenue-trend" onclick="event.preventDefault(); if(window.KDS) window.KDS.showSalesDetailsSection();">Detaya Git →</a>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="revenue-trend-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card card-chart">
+                        <div class="card-header card-header-chart">
+                            <div class="card-header-left">
+                                <span class="card-icon">🏆</span>
+                                <h3>En Uygun Depolar</h3>
+                            </div>
+                            <a href="#" class="link-detail" id="link-warehouse-comparison" onclick="event.preventDefault(); if(window.KDS) window.KDS.showAnalysisSection();">Detaya Git →</a>
+                        </div>
+                        <div class="card-body">
+                            <!-- Loading state -->
+                            <div class="best-depots-loading" id="best-depots-loading">
+                                <p>En uygun depolar hesaplanıyor...</p>
+                            </div>
+                            <!-- Content -->
+                            <div class="best-depots-content hidden" id="best-depots-content">
+                                <!-- Will be populated by JavaScript -->
+                            </div>
+                            <!-- Empty state -->
+                            <div class="best-depots-empty hidden" id="best-depots-empty">
+                                <p>Henüz uygun depo verisi bulunamadı.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Supporting Charts Row -->
+                <div class="charts-grid charts-grid-supporting">
+                    <div class="card card-chart">
+                        <div class="card-header card-header-chart">
+                            <div class="card-header-left">
+                                <span class="card-icon">📦</span>
+                                <h3>Depoyu En Çok Tüketen Ürünler (Top 5)</h3>
+                            </div>
+                            <a href="#" class="link-detail" id="link-top-products" onclick="event.preventDefault(); if(window.KDS) window.KDS.showSalesDetailsSection();">Detaya Git →</a>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="top-products-space-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card card-chart">
+                        <div class="card-header card-header-chart">
+                            <div class="card-header-left">
+                                <span class="card-icon">🔮</span>
+                                <h3>Kapasite Tahmini (3 Ay)</h3>
+                            </div>
+                            <a href="#" class="link-detail" id="link-capacity-forecast" onclick="event.preventDefault(); if(window.KDS) window.KDS.showAnalysisSection();">Detaya Git →</a>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="capacity-forecast-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Inflation & Stock Strategy Section -->
             <section class="inflation-section" id="inflation-section">
                 <h2>Enflasyon ve Stok Stratejisi</h2>
@@ -466,66 +594,6 @@
 
             <!-- Analysis Content -->
             <div class="analysis-content">
-                <section class="analysis-product-charts">
-                  <h2 class="section-title">Ürün Performans Grafikleri</h2>
-                  <p class="section-subtitle">
-                    En güncel satış verilerini kullanarak ürün performansını görüntüleyin.
-                  </p>
-                  <div class="analysis-charts-grid">
-                    <div class="card card-chart card-visible">
-                      <div class="card-header">
-                        <span class="card-icon">📦</span>
-                        <div class="card-header-content">
-                          <h3>En Çok Satan 10 Ürün</h3>
-                          <p class="card-subtitle">Adet bazında sıralama</p>
-                        </div>
-                      </div>
-                      <div class="card-body">
-                        <div class="chart-container-compact">
-                          <div class="chart-loading" id="analysis-quantity-loading"><p>Grafik yükleniyor...</p></div>
-                          <p class="chart-error hidden" id="analysis-quantity-error">Veriler yüklenemedi.</p>
-                          <canvas id="analysis-quantity-chart" class="hidden"></canvas>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="card card-chart card-visible">
-                      <div class="card-header">
-                        <span class="card-icon">💰</span>
-                        <div class="card-header-content">
-                          <h3>En Çok Ciro Yapan 10 Ürün</h3>
-                          <p class="card-subtitle">Ciro bazında sıralama</p>
-                        </div>
-                      </div>
-                      <div class="card-body">
-                        <div class="chart-container-compact">
-                          <div class="chart-loading" id="analysis-revenue-loading"><p>Grafik yükleniyor...</p></div>
-                          <p class="chart-error hidden" id="analysis-revenue-error">Veriler yüklenemedi.</p>
-                          <canvas id="analysis-revenue-chart" class="hidden"></canvas>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                <section class="analysis-trend-section">
-                  <div class="card card-chart card-visible">
-                    <div class="card-header card-header-chart">
-                      <div class="card-header-left">
-                        <span class="card-icon">📊</span>
-                        <h3>Son 6 Ay Satış Trendi (Toplam Ciro)</h3>
-                      </div>
-                    </div>
-                    <div class="card-body">
-                      <div class="chart-container-compact" style="height:360px;max-height:360px;">
-                        <div class="chart-loading" id="analysis-trend-loading"><p>Grafik yükleniyor...</p></div>
-                        <p class="chart-error hidden" id="analysis-trend-error">Veriler yüklenemedi.</p>
-                        <canvas id="analysis-trend-chart" class="hidden"></canvas>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
                 <section class="analysis-map-section">
                   <h2 class="section-title">İzmir Depo Haritası</h2>
                   <p class="section-subtitle">
@@ -618,6 +686,42 @@
                 <div class="form-group">
                     <label for="product-price">Birim Fiyat (₺) <span class="required">*</span></label>
                     <input type="number" id="product-price" name="birim_fiyat" step="0.01" min="0" required placeholder="0.00">
+                </div>
+                
+                <!-- Stock Quantity -->
+                <div class="form-group">
+                    <label for="product-adet">Adet/Stok <span class="required">*</span></label>
+                    <input type="number" id="product-adet" name="adet" step="1" min="1" value="1" required placeholder="1">
+                    <span class="form-hint">Ürünün başlangıç stok miktarı</span>
+                </div>
+                
+                <!-- Location Selection -->
+                <div class="form-group">
+                    <label for="product-lokasyon">Depo Seç <span class="required">*</span></label>
+                    <select id="product-lokasyon" name="lokasyon_id" required>
+                        <option value="">Depo seçin...</option>
+                        <!-- Options will be loaded from API -->
+                    </select>
+                    <div id="lokasyon-error-message" class="form-hint form-error-inline hidden">Depolar yüklenemedi.</div>
+                </div>
+                
+                <!-- Live Preview -->
+                <div class="form-group" id="stock-preview-group" style="display: none;">
+                    <div class="stock-preview">
+                        <p class="stock-preview-text" id="stock-preview-text">
+                            <span class="preview-label">Kaplayacağı Alan:</span>
+                            <span class="preview-value" id="preview-space-db">—</span>
+                        </p>
+                        <p class="stock-preview-text" id="stock-preview-occupancy">
+                            <span class="preview-label">Bu ürün depoyu yaklaşık</span>
+                            <span class="preview-value" id="preview-occupancy-percent">—</span>
+                            <span class="preview-label">doldurur</span>
+                        </p>
+                        <p class="stock-preview-text" id="stock-preview-total-occupancy">
+                            <span class="preview-label">Bu ekleme sonrası toplam doluluk:</span>
+                            <span class="preview-value" id="preview-total-occupancy-percent">—</span>
+                        </p>
+                    </div>
                 </div>
                 
                 <!-- Error Message -->
