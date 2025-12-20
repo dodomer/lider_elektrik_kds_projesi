@@ -596,6 +596,66 @@
 
             <!-- Analysis Content -->
             <div class="analysis-content">
+                <!-- Depolar Section -->
+                <section class="depolar-section">
+                    <div class="depolar-header">
+                        <h2 class="section-title">Depolar</h2>
+                        <button class="btn-primary" id="yeni-depo-ekle-btn">
+                            <span class="btn-icon">➕</span>
+                            Yeni Depo Ekle
+                        </button>
+                    </div>
+                    
+                    <!-- Search and Sort Controls -->
+                    <div class="depolar-controls">
+                        <div class="search-box">
+                            <input 
+                                type="text" 
+                                id="depo-search" 
+                                placeholder="Depo adı veya adres ara..." 
+                                class="search-input"
+                            />
+                            <span class="search-icon">🔍</span>
+                        </div>
+                        <div class="sort-controls">
+                            <label for="depo-sort">Sırala:</label>
+                            <select id="depo-sort" class="sort-select">
+                                <option value="distance">Mesafe (Artan)</option>
+                                <option value="distance-desc">Mesafe (Azalan)</option>
+                                <option value="rent">Aylık Kira (Artan)</option>
+                                <option value="rent-desc">Aylık Kira (Azalan)</option>
+                                <option value="capacity">Kapasite (Artan)</option>
+                                <option value="capacity-desc">Kapasite (Azalan)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Depolar Table -->
+                    <div class="depolar-table-container">
+                        <table class="depolar-table" id="depolar-table">
+                            <thead>
+                                <tr>
+                                    <th>Fotoğraf</th>
+                                    <th>Depo Adı</th>
+                                    <th>Mesafe (km)</th>
+                                    <th>Aylık Kira (₺)</th>
+                                    <th>Kapasite (DB)</th>
+                                    <th>Kullanılabilir Kapasite (DB)</th>
+                                    <th>Metrekare</th>
+                                    <th>Yükseklik (m)</th>
+                                    <th>Adres</th>
+                                    <th>İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody id="depolar-table-body">
+                                <tr>
+                                    <td colspan="10" class="loading-cell">Yükleniyor...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
                 <section class="analysis-map-section">
                   <h2 class="section-title">İzmir Depo Haritası</h2>
                   <p class="section-subtitle">
@@ -623,7 +683,8 @@
                 <h3>➕ Yeni Ürün Ekle</h3>
                 <button class="modal-close-btn" id="modal-close-btn" type="button">&times;</button>
             </div>
-            <form id="add-product-form" class="modal-body">
+            <form id="add-product-form">
+                <div class="modal-body">
                 <!-- Product Name -->
                 <div class="form-group">
                     <label for="product-name">Ürün Adı <span class="required">*</span></label>
@@ -731,6 +792,7 @@
                 
                 <!-- Success Message -->
                 <div id="form-success-message" class="form-success hidden"></div>
+                </div>
             </form>
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" id="modal-cancel-btn">
@@ -752,7 +814,8 @@
                 <h3>✏️ Ürün Düzenle</h3>
                 <button class="modal-close-btn" id="edit-modal-close-btn" type="button">&times;</button>
             </div>
-            <form id="edit-product-form" class="modal-body">
+            <form id="edit-product-form">
+                <div class="modal-body">
                 <!-- Hidden field for product ID -->
                 <input type="hidden" id="edit-product-id" name="urun_id">
                 
@@ -793,6 +856,7 @@
                 
                 <!-- Success Message -->
                 <div id="edit-form-success-message" class="form-success hidden"></div>
+                </div>
             </form>
             <div class="modal-footer modal-footer-split">
                 <button type="button" class="btn-danger-outline" id="edit-modal-delete-btn">
@@ -837,6 +901,147 @@
         </div>
     </div>
 
+    <!-- Yeni Depo Ekle Modal -->
+    <div id="yeni-depo-modal" class="modal hidden">
+        <div class="modal-backdrop" id="yeni-depo-modal-backdrop"></div>
+        <div class="modal-container modal-lg">
+            <div class="modal-header">
+                <h3>➕ Yeni Depo Ekle</h3>
+                <button class="modal-close-btn" id="yeni-depo-modal-close-btn" type="button">&times;</button>
+            </div>
+            <form id="yeni-depo-form" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <!-- Depo Adı -->
+                        <div class="form-group">
+                            <label for="depo-ad">Depo Adı <span class="required">*</span></label>
+                            <input type="text" id="depo-ad" name="ad" required placeholder="Örn: Kazımdırık Depo">
+                        </div>
+                        
+                        <!-- Adres -->
+                        <div class="form-group">
+                            <label for="depo-adres">Adres</label>
+                            <input type="text" id="depo-adres" name="adres" placeholder="Depo adresi">
+                        </div>
+                        
+                        <!-- Enlem -->
+                        <div class="form-group">
+                            <label for="depo-enlem">Enlem (Latitude) <span class="required">*</span></label>
+                            <input type="number" id="depo-enlem" name="enlem" step="any" required placeholder="38.4237">
+                        </div>
+                        
+                        <!-- Boylam -->
+                        <div class="form-group">
+                            <label for="depo-boylam">Boylam (Longitude) <span class="required">*</span></label>
+                            <input type="number" id="depo-boylam" name="boylam" step="any" required placeholder="27.1428">
+                        </div>
+                        
+                        <!-- Metrekare -->
+                        <div class="form-group">
+                            <label for="depo-metrekare">Metrekare</label>
+                            <input type="number" id="depo-metrekare" name="metrekare" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        
+                        <!-- Yükseklik -->
+                        <div class="form-group">
+                            <label for="depo-yukseklik">Yükseklik (m)</label>
+                            <input type="number" id="depo-yukseklik" name="yukseklik_m" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        
+                        <!-- Kapasite DB -->
+                        <div class="form-group">
+                            <label for="depo-kapasite">Kapasite (DB)</label>
+                            <input type="number" id="depo-kapasite" name="kapasite_db" step="1" min="0" placeholder="0">
+                        </div>
+                        
+                        <!-- Kullanılabilir Oran -->
+                        <div class="form-group">
+                            <label for="depo-kullanilabilir-oran">Kullanılabilir Oran (%)</label>
+                            <input type="number" id="depo-kullanilabilir-oran" name="kullanilabilir_oran" step="0.01" min="0" max="100" placeholder="0.00">
+                        </div>
+                        
+                        <!-- Kullanılabilir Kapasite DB (Auto-calculated) -->
+                        <div class="form-group">
+                            <label for="depo-kullanilabilir-kapasite">Kullanılabilir Kapasite (DB)</label>
+                            <input type="number" id="depo-kullanilabilir-kapasite" name="kullanilabilir_kapasite_db" step="0.01" min="0" placeholder="0.00" readonly>
+                            <span class="form-hint">Otomatik hesaplanır: Kapasite × (Kullanılabilir Oran / 100)</span>
+                        </div>
+                        
+                        <!-- Aylık Kira -->
+                        <div class="form-group">
+                            <label for="depo-aylik-kira">Aylık Kira (₺)</label>
+                            <input type="number" id="depo-aylik-kira" name="aylik_kira" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                    </div>
+                    
+                    <!-- Photo Upload -->
+                    <div class="form-group">
+                        <label for="depo-photos">Fotoğraflar</label>
+                        <input type="file" id="depo-photos" name="photos" multiple accept="image/*" class="file-input">
+                        <span class="form-hint">Birden fazla fotoğraf seçebilirsiniz (maksimum 5MB her biri)</span>
+                    </div>
+                    
+                    <!-- Photo Preview -->
+                    <div id="photo-preview-container" class="photo-preview-container hidden">
+                        <label>Seçilen Fotoğraflar:</label>
+                        <div id="photo-preview-grid" class="photo-preview-grid"></div>
+                    </div>
+                    
+                    <!-- Error Message -->
+                    <div id="yeni-depo-error-message" class="form-error hidden"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" id="yeni-depo-cancel-btn">İptal</button>
+                    <button type="submit" class="btn-primary" id="yeni-depo-save-btn">
+                        <span class="btn-icon">💾</span>
+                        Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-depot-modal" class="modal hidden">
+        <div class="modal-backdrop" id="delete-depot-modal-backdrop"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>Depo Silinsin mi?</h3>
+                <button class="modal-close-btn" id="delete-depot-modal-close-btn" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="delete-depot-message">Bu depo listeden kaldırılacak. Geri alınabilir.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="delete-depot-cancel-btn">İptal</button>
+                <button type="button" class="btn btn-danger" id="delete-depot-confirm-btn">Sil</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Photo Modal/Lightbox -->
+    <div id="photo-modal" class="modal hidden">
+        <div class="modal-backdrop" id="photo-modal-backdrop"></div>
+        <div class="modal-container modal-photo">
+            <div class="modal-header">
+                <h3 id="photo-modal-title">Depo Fotoğrafları</h3>
+                <button class="modal-close-btn" id="photo-modal-close-btn" type="button">&times;</button>
+            </div>
+            <div class="modal-body photo-modal-body">
+                <div class="photo-viewer">
+                    <button class="photo-nav-btn photo-nav-prev" id="photo-prev-btn" aria-label="Önceki fotoğraf">‹</button>
+                    <div class="photo-container">
+                        <img id="photo-modal-image" src="" alt="Depo fotoğrafı" />
+                        <div class="photo-counter">
+                            <span id="photo-current">1</span> / <span id="photo-total">1</span>
+                        </div>
+                    </div>
+                    <button class="photo-nav-btn photo-nav-next" id="photo-next-btn" aria-label="Sonraki fotoğraf">›</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript -->
     <script src="js/main.js"></script>
     <script src="/js/inflation.js"></script>
@@ -848,6 +1053,8 @@
     <script>
       let depoMap = null;
       let depoMapInitialized = false;
+      // Store markers by lokasyon_id for table interaction
+      const depoMarkers = new Map();
 
       function initDepoMap() {
         const mapContainer = document.getElementById('depo-map');
@@ -860,6 +1067,7 @@
           return;
         }
 
+        // Default center (Izmir) - will be adjusted after loading business location
         const izmirCenter = [38.4237, 27.1428];
 
         depoMap = L.map('depo-map').setView(izmirCenter, 11);
@@ -869,13 +1077,85 @@
             attribution: '&copy; OpenMapTiles &copy; OpenStreetMap contributors'
         }).addTo(depoMap);
 
+        // Create custom store icon for our business
+        const storeIcon = L.divIcon({
+          className: 'custom-store-icon',
+          html: `
+            <div style="
+              width: 40px;
+              height: 40px;
+              background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+              border: 3px solid #ffffff;
+              border-radius: 8px 8px 8px 2px;
+              box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              position: relative;
+              transform: rotate(-2deg);
+            ">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 21H21V8L12 3L3 8V21Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 10H21" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M9 10V21" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M15 10V21" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="12" cy="15" r="1.5" fill="white"/>
+              </svg>
+            </div>
+          `,
+          iconSize: [40, 40],
+          iconAnchor: [20, 40],
+          popupAnchor: [0, -40]
+        });
 
+        // Store all markers for bounds calculation
+        const allMarkers = [];
+        let businessMarker = null;
 
-        // Optional: load depots from backend
-        fetch('/api/depots')
-          .then(response => response.json())
+        // Fetch business location from API
+        fetch('/api/business')
+          .then(response => {
+            if (!response.ok) {
+              return response.json().then(err => {
+                throw new Error(err.error || 'Ana mağaza konumu alınamadı');
+              });
+            }
+            return response.json();
+          })
+          .then(business => {
+            // Validate coordinates
+            if (!business.enlem || !business.boylam || 
+                isNaN(parseFloat(business.enlem)) || isNaN(parseFloat(business.boylam))) {
+              console.error('❌ Geçersiz koordinatlar:', business);
+              return;
+            }
+
+            // Add business marker with custom icon
+            businessMarker = L.marker(
+              [business.enlem, business.boylam],
+              { icon: storeIcon }
+            ).addTo(depoMap);
+
+            // Attach popup to business marker
+            const businessName = business.ad || 'Lider Elektrik (Ana Mağaza)';
+            businessMarker.bindPopup(`
+              <div style="text-align: center; padding: 4px;">
+                <strong style="font-size: 14px;">🏬 ${businessName}</strong><br>
+                <span style="font-size: 12px; color: #666;">Ana işletme konumu</span>
+              </div>
+            `);
+
+            allMarkers.push(businessMarker);
+
+            // Load depots and adjust map view
+            return fetch('/api/depots');
+          })
+          .then(response => {
+            if (!response) return null;
+            return response.json();
+          })
           .then(depolar => {
-            if (!Array.isArray(depolar)) return;
+            if (!depolar || !Array.isArray(depolar)) return;
 
             depolar.forEach(depo => {
               const lat = depo.latitude ?? depo.enlem;
@@ -885,13 +1165,449 @@
               const marker = L.marker([lat, lng]).addTo(depoMap);
               const name = depo.name || depo.depo_adi || 'Depo';
               marker.bindPopup(`<strong>${name}</strong>`);
+              allMarkers.push(marker);
+              
+              // Store marker by lokasyon_id for table interaction
+              const depoId = depo.id || depo.lokasyon_id;
+              if (depoId) {
+                depoMarkers.set(depoId, marker);
+              }
             });
+
+            // Adjust map view to show all markers
+            if (allMarkers.length > 0) {
+              if (allMarkers.length > 1) {
+                // Fit bounds to include all markers (business + warehouses)
+                const group = new L.featureGroup(allMarkers);
+                depoMap.fitBounds(group.getBounds().pad(0.1));
+              } else if (businessMarker) {
+                // If only business marker, center on it
+                depoMap.setView([businessMarker.getLatLng().lat, businessMarker.getLatLng().lng], 12);
+              }
+            }
           })
           .catch(err => {
-            console.error('Depo verileri alınırken hata oluştu:', err);
+            console.error('❌ Ana mağaza veya depo verileri alınırken hata oluştu:', err);
+            // If error, try to load depots anyway
+            fetch('/api/depots')
+              .then(response => response.json())
+              .then(depolar => {
+                if (!Array.isArray(depolar)) return;
+                depolar.forEach(depo => {
+                  const lat = depo.latitude ?? depo.enlem;
+                  const lng = depo.longitude ?? depo.boylam;
+                  if (!lat || !lng) return;
+                  const marker = L.marker([lat, lng]).addTo(depoMap);
+                  const name = depo.name || depo.depo_adi || 'Depo';
+                  marker.bindPopup(`<strong>${name}</strong>`);
+                });
+              })
+              .catch(depoErr => {
+                console.error('❌ Depo verileri alınırken hata oluştu:', depoErr);
+              });
           });
 
         depoMapInitialized = true;
+      }
+
+      // Depolar table functionality
+      let allDepotsData = [];
+      let filteredDepotsData = [];
+      
+      // Photo modal state (global scope for accessibility)
+      let currentPhotos = [];
+      let currentPhotoIndex = 0;
+
+      function formatNumber(num) {
+        if (num === null || num === undefined || isNaN(num)) return '-';
+        return parseFloat(num).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      function formatCurrency(num) {
+        if (num === null || num === undefined || isNaN(num)) return '-';
+        return parseFloat(num).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₺';
+      }
+
+      function renderDepotsTable(depots) {
+        const tbody = document.getElementById('depolar-table-body');
+        if (!tbody) return;
+
+        if (depots.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="10" class="no-data-cell">Depo bulunamadı.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = depots.map(depo => {
+          const distance = depo.distance_km !== null ? formatNumber(depo.distance_km) + ' km' : '-';
+          const rent = formatCurrency(depo.aylik_kira);
+          const capacity = formatNumber(depo.kapasite_db);
+          const availableCapacity = formatNumber(depo.kullanilabilir_kapasite_db);
+          const area = depo.metrekare ? formatNumber(depo.metrekare) + ' m²' : '-';
+          const height = depo.yukseklik_m ? formatNumber(depo.yukseklik_m) + ' m' : '-';
+          const address = depo.adres || '-';
+          
+          // Photo thumbnail
+          const photos = depo.photos || [];
+          const firstPhoto = photos.length > 0 ? photos[0].foto_url : null;
+          const photoThumbnail = firstPhoto 
+            ? `<button type="button" class="depo-thumbnail-btn" data-lokasyon-id="${depo.lokasyon_id}" data-photos='${JSON.stringify(photos)}' aria-label="Fotoğrafları görüntüle"><img src="${firstPhoto}" alt="${depo.ad || 'Depo'}" class="depo-thumbnail" /></button>`
+            : '<div class="depo-thumbnail-placeholder">📷</div>';
+
+          const isOwned = depo.sahip_miyiz === 1;
+          const ownedBadge = isOwned ? '<span class="owned-badge">✅ Satın Alındı</span>' : '';
+          
+          return `
+            <tr data-lokasyon-id="${depo.lokasyon_id}" class="depo-row" data-owned="${isOwned ? '1' : '0'}">
+              <td data-label="Fotoğraf" class="photo-cell">${photoThumbnail}</td>
+              <td data-label="Depo Adı"><strong>${depo.ad || 'Depo'}</strong> ${ownedBadge}</td>
+              <td data-label="Mesafe">${distance}</td>
+              <td data-label="Aylık Kira">${rent}</td>
+              <td data-label="Kapasite (DB)">${capacity}</td>
+              <td data-label="Kullanılabilir Kapasite (DB)">${availableCapacity}</td>
+              <td data-label="Metrekare">${area}</td>
+              <td data-label="Yükseklik">${height}</td>
+              <td data-label="Adres" class="address-cell">${address}</td>
+              <td data-label="İşlemler" class="actions-cell">
+                <div class="action-buttons">
+                  <button type="button" class="btn-action btn-satin-al ${isOwned ? 'disabled' : ''}" 
+                          data-lokasyon-id="${depo.lokasyon_id}" 
+                          ${isOwned ? 'disabled' : ''}
+                          title="${isOwned ? 'Zaten satın alındı' : 'Satın alındı olarak işaretle'}">
+                    Satın Aldım
+                  </button>
+                  <button type="button" class="btn-action btn-delete" 
+                          data-lokasyon-id="${depo.lokasyon_id}" 
+                          data-depo-ad="${depo.ad || 'Depo'}"
+                          title="Depoyu sil">
+                    Sil
+                  </button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        // Add click handlers to rows (but not photo cells or action buttons)
+        tbody.querySelectorAll('.depo-row').forEach(row => {
+          row.style.cursor = 'pointer';
+          row.addEventListener('click', function(e) {
+            // Don't trigger row click if clicking on photo thumbnail or action buttons
+            if (e.target.closest('.photo-cell') || e.target.closest('.actions-cell')) return;
+            const lokasyonId = parseInt(this.dataset.lokasyonId);
+            highlightMarker(lokasyonId);
+          });
+          row.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = 'var(--bg-hover, rgba(255, 255, 255, 0.05))';
+          });
+          row.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '';
+          });
+        });
+        
+        // Add click handlers to action buttons
+        tbody.querySelectorAll('.btn-satin-al').forEach(btn => {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent row click
+            if (this.disabled) return;
+            const lokasyonId = parseInt(this.dataset.lokasyonId);
+            markDepotAsOwned(lokasyonId, this);
+          });
+        });
+        
+        tbody.querySelectorAll('.btn-delete').forEach(btn => {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent row click
+            const lokasyonId = parseInt(this.dataset.lokasyonId);
+            const depoAd = this.dataset.depoAd || 'Depo';
+            showDeleteConfirmation(lokasyonId, depoAd);
+          });
+        });
+
+        // Add click handlers to photo thumbnails
+        tbody.querySelectorAll('.depo-thumbnail-btn').forEach(btn => {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent row click
+            e.preventDefault(); // Prevent any default behavior
+            const photos = JSON.parse(this.dataset.photos || '[]');
+            const lokasyonId = this.dataset.lokasyonId;
+            const depoName = this.closest('.depo-row').querySelector('td[data-label="Depo Adı"] strong').textContent;
+            if (typeof openPhotoModal === 'function') {
+              openPhotoModal(photos, lokasyonId, depoName);
+            } else {
+              console.error('openPhotoModal function not found');
+            }
+          });
+        });
+      }
+      
+      // Photo modal functions (global scope)
+      function openPhotoModal(photos, lokasyonId, depoName) {
+        if (!photos || photos.length === 0) {
+          console.warn('No photos to display');
+          return;
+        }
+        
+        const photoModal = document.getElementById('photo-modal');
+        if (!photoModal) {
+          console.error('Photo modal element not found');
+          return;
+        }
+        
+        currentPhotos = photos;
+        currentPhotoIndex = 0;
+        
+        const photoModalTitle = document.getElementById('photo-modal-title');
+        const photoModalImage = document.getElementById('photo-modal-image');
+        const photoCurrent = document.getElementById('photo-current');
+        const photoTotal = document.getElementById('photo-total');
+        
+        if (photoModalTitle) photoModalTitle.textContent = `${depoName} - Fotoğraflar`;
+        if (photoTotal) photoTotal.textContent = photos.length;
+        updatePhotoDisplay();
+        
+        photoModal.classList.remove('hidden');
+        if (typeof lockBodyScroll === 'function') {
+          lockBodyScroll(true);
+        } else {
+          document.body.style.overflow = 'hidden';
+        }
+      }
+
+      function closePhotoModal() {
+        const photoModal = document.getElementById('photo-modal');
+        if (photoModal) {
+          photoModal.classList.add('hidden');
+        }
+        if (typeof lockBodyScroll === 'function') {
+          lockBodyScroll(false);
+        } else {
+          document.body.style.overflow = '';
+        }
+        currentPhotos = [];
+        currentPhotoIndex = 0;
+      }
+
+      function updatePhotoDisplay() {
+        if (currentPhotos.length === 0) return;
+        
+        const photoModalImage = document.getElementById('photo-modal-image');
+        const photoCurrent = document.getElementById('photo-current');
+        const photoPrevBtn = document.getElementById('photo-prev-btn');
+        const photoNextBtn = document.getElementById('photo-next-btn');
+        
+        if (!photoModalImage || !photoCurrent) return;
+        
+        const currentPhoto = currentPhotos[currentPhotoIndex];
+        photoModalImage.src = currentPhoto.foto_url;
+        photoCurrent.textContent = currentPhotoIndex + 1;
+        
+        // Show/hide navigation buttons
+        if (photoPrevBtn) {
+          photoPrevBtn.style.display = currentPhotoIndex === 0 ? 'none' : 'flex';
+        }
+        if (photoNextBtn) {
+          photoNextBtn.style.display = currentPhotoIndex === currentPhotos.length - 1 ? 'none' : 'flex';
+        }
+      }
+
+      function showNextPhoto() {
+        if (currentPhotoIndex < currentPhotos.length - 1) {
+          currentPhotoIndex++;
+          updatePhotoDisplay();
+        }
+      }
+
+      function showPrevPhoto() {
+        if (currentPhotoIndex > 0) {
+          currentPhotoIndex--;
+          updatePhotoDisplay();
+        }
+      }
+
+      function highlightMarker(lokasyonId) {
+        const marker = depoMarkers.get(lokasyonId);
+        if (!marker || !depoMap) return;
+
+        // Open popup and pan to marker
+        marker.openPopup();
+        depoMap.setView(marker.getLatLng(), Math.max(depoMap.getZoom(), 14));
+        
+        // Add highlight effect with a pulsing circle
+        const highlightCircle = L.circle(marker.getLatLng(), {
+          radius: 200,
+          color: '#FF6B35',
+          fillColor: '#FF6B35',
+          fillOpacity: 0.2,
+          weight: 3
+        }).addTo(depoMap);
+
+        // Remove highlight after 2 seconds
+        setTimeout(() => {
+          depoMap.removeLayer(highlightCircle);
+        }, 2000);
+      }
+      
+      // Remove marker from map
+      function removeMarker(lokasyonId) {
+        const marker = depoMarkers.get(lokasyonId);
+        if (marker && depoMap) {
+          depoMap.removeLayer(marker);
+          depoMarkers.delete(lokasyonId);
+        }
+      }
+      
+      // Update marker popup text
+      function updateMarkerPopup(lokasyonId, data) {
+        const marker = depoMarkers.get(lokasyonId);
+        if (!marker) return;
+        
+        const depo = allDepotsData.find(d => d.lokasyon_id === lokasyonId);
+        if (!depo) return;
+        
+        let popupContent = `<strong>${depo.ad || 'Depo'}</strong>`;
+        if (data && data.sahip_miyiz === 1) {
+          popupContent += '<br><span style="color: #10b981;">✅ Satın Alındı</span>';
+        }
+        marker.setPopupContent(popupContent);
+      }
+      
+      // Reload depots for map
+      function loadDepotsForMap() {
+        if (!depoMapInitialized || !depoMap) return;
+        
+        // Clear existing markers (except business)
+        depoMarkers.forEach((marker) => {
+          depoMap.removeLayer(marker);
+        });
+        depoMarkers.clear();
+        
+        // Reload depots and add markers
+        fetch('/api/depots')
+          .then(response => response.json())
+          .then(depolar => {
+            if (Array.isArray(depolar)) {
+              depolar.forEach(depo => {
+                const lat = depo.latitude ?? depo.enlem;
+                const lng = depo.longitude ?? depo.boylam;
+                if (!lat || !lng) return;
+                
+                const marker = L.marker([lat, lng]).addTo(depoMap);
+                const name = depo.name || depo.depo_adi || 'Depo';
+                let popupContent = `<strong>${name}</strong>`;
+                if (depo.sahip_miyiz === 1) {
+                  popupContent += '<br><span style="color: #10b981;">✅ Satın Alındı</span>';
+                }
+                marker.bindPopup(popupContent);
+                
+                const depoId = depo.id || depo.lokasyon_id;
+                if (depoId) {
+                  depoMarkers.set(depoId, marker);
+                }
+              });
+            }
+          })
+          .catch(err => {
+            console.error('❌ Depo verileri alınırken hata oluştu:', err);
+          });
+      }
+
+      function filterDepots(searchTerm) {
+        if (!searchTerm || searchTerm.trim() === '') {
+          filteredDepotsData = [...allDepotsData];
+        } else {
+          const term = searchTerm.toLowerCase().trim();
+          filteredDepotsData = allDepotsData.filter(depo => {
+            const name = (depo.ad || '').toLowerCase();
+            const address = (depo.adres || '').toLowerCase();
+            return name.includes(term) || address.includes(term);
+          });
+        }
+        sortDepots();
+      }
+
+      function sortDepots() {
+        const sortSelect = document.getElementById('depo-sort');
+        if (!sortSelect) return;
+
+        const sortValue = sortSelect.value;
+        let sorted = [...filteredDepotsData];
+
+        switch(sortValue) {
+          case 'distance':
+            sorted.sort((a, b) => {
+              if (a.distance_km === null && b.distance_km === null) return 0;
+              if (a.distance_km === null) return 1;
+              if (b.distance_km === null) return -1;
+              return a.distance_km - b.distance_km;
+            });
+            break;
+          case 'distance-desc':
+            sorted.sort((a, b) => {
+              if (a.distance_km === null && b.distance_km === null) return 0;
+              if (a.distance_km === null) return 1;
+              if (b.distance_km === null) return -1;
+              return b.distance_km - a.distance_km;
+            });
+            break;
+          case 'rent':
+            sorted.sort((a, b) => {
+              const rentA = a.aylik_kira || 0;
+              const rentB = b.aylik_kira || 0;
+              return rentA - rentB;
+            });
+            break;
+          case 'rent-desc':
+            sorted.sort((a, b) => {
+              const rentA = a.aylik_kira || 0;
+              const rentB = b.aylik_kira || 0;
+              return rentB - rentA;
+            });
+            break;
+          case 'capacity':
+            sorted.sort((a, b) => {
+              const capA = a.kapasite_db || 0;
+              const capB = b.kapasite_db || 0;
+              return capA - capB;
+            });
+            break;
+          case 'capacity-desc':
+            sorted.sort((a, b) => {
+              const capA = a.kapasite_db || 0;
+              const capB = b.kapasite_db || 0;
+              return capB - capA;
+            });
+            break;
+        }
+
+        renderDepotsTable(sorted);
+      }
+
+      function loadDepotsTable() {
+        const tbody = document.getElementById('depolar-table-body');
+        if (!tbody) return;
+
+        fetch('/api/depolar-detay')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('Depo verileri alınamadı');
+            }
+            return response.json();
+          })
+          .then(data => {
+            if (data.success && data.depolar) {
+              allDepotsData = data.depolar;
+              filteredDepotsData = [...allDepotsData];
+              sortDepots();
+            } else {
+              tbody.innerHTML = '<tr><td colspan="10" class="error-cell">Depo verileri yüklenemedi.</td></tr>';
+            }
+          })
+          .catch(err => {
+            console.error('❌ Depo tablosu yüklenirken hata:', err);
+            if (tbody) {
+              tbody.innerHTML = '<tr><td colspan="10" class="error-cell">Depo verileri yüklenirken bir hata oluştu.</td></tr>';
+            }
+          });
       }
 
       // Optional: do nothing on DOMContentLoaded except maybe prepare things
@@ -901,10 +1617,482 @@
           analysisButton.addEventListener('click', function () {
             // Ensure map is initialized after the analysis section becomes visible
             setTimeout(initDepoMap, 0);
+            // Load depots table
+            setTimeout(loadDepotsTable, 100);
           });
         }
+
+        // Search functionality
+        const searchInput = document.getElementById('depo-search');
+        if (searchInput) {
+          searchInput.addEventListener('input', function(e) {
+            filterDepots(e.target.value);
+          });
+        }
+
+        // Sort functionality
+        const sortSelect = document.getElementById('depo-sort');
+        if (sortSelect) {
+          sortSelect.addEventListener('change', function() {
+            sortDepots();
+          });
+        }
+
+        // Photo modal event listeners (functions are defined globally above)
+        const photoModal = document.getElementById('photo-modal');
+        const photoModalBackdrop = document.getElementById('photo-modal-backdrop');
+        const photoModalClose = document.getElementById('photo-modal-close-btn');
+        const photoPrevBtn = document.getElementById('photo-prev-btn');
+        const photoNextBtn = document.getElementById('photo-next-btn');
+
+        // Event listeners for photo modal
+        if (photoModalBackdrop) {
+          photoModalBackdrop.addEventListener('click', closePhotoModal);
+        }
+        if (photoModalClose) {
+          photoModalClose.addEventListener('click', closePhotoModal);
+        }
+        if (photoPrevBtn) {
+          photoPrevBtn.addEventListener('click', showPrevPhoto);
+        }
+        if (photoNextBtn) {
+          photoNextBtn.addEventListener('click', showNextPhoto);
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+          if (photoModal && !photoModal.classList.contains('hidden')) {
+            if (e.key === 'Escape') {
+              closePhotoModal();
+            } else if (e.key === 'ArrowLeft') {
+              showPrevPhoto();
+            } else if (e.key === 'ArrowRight') {
+              showNextPhoto();
+            }
+          }
+        });
+
+        // Yeni Depo Ekle Modal functionality
+        const yeniDepoModal = document.getElementById('yeni-depo-modal');
+        const yeniDepoModalBackdrop = document.getElementById('yeni-depo-modal-backdrop');
+        const yeniDepoModalClose = document.getElementById('yeni-depo-modal-close-btn');
+        const yeniDepoCancelBtn = document.getElementById('yeni-depo-cancel-btn');
+        const yeniDepoForm = document.getElementById('yeni-depo-form');
+        const yeniDepoBtn = document.getElementById('yeni-depo-ekle-btn');
+        const depoPhotosInput = document.getElementById('depo-photos');
+        const photoPreviewContainer = document.getElementById('photo-preview-container');
+        const photoPreviewGrid = document.getElementById('photo-preview-grid');
+        const yeniDepoErrorMessage = document.getElementById('yeni-depo-error-message');
+
+        // Utility function to lock/unlock body scroll
+        function lockBodyScroll(lock) {
+          if (lock) {
+            const scrollY = window.scrollY;
+            document.body.classList.add('modal-open');
+            document.body.style.top = `-${scrollY}px`;
+          } else {
+            const scrollY = document.body.style.top;
+            document.body.classList.remove('modal-open');
+            document.body.style.top = '';
+            if (scrollY) {
+              window.scrollTo(0, parseInt(scrollY.replace('-', '')) || 0);
+            }
+          }
+        }
+        
+        function openYeniDepoModal() {
+          if (yeniDepoModal) {
+            yeniDepoModal.classList.remove('hidden');
+            lockBodyScroll(true);
+          }
+        }
+        
+        function closeYeniDepoModal() {
+          if (yeniDepoModal) {
+            yeniDepoModal.classList.add('hidden');
+            lockBodyScroll(false);
+            // Reset form
+            if (yeniDepoForm) {
+              yeniDepoForm.reset();
+            }
+            // Clear photo preview
+            if (photoPreviewContainer) {
+              photoPreviewContainer.classList.add('hidden');
+            }
+            if (photoPreviewGrid) {
+              photoPreviewGrid.innerHTML = '';
+            }
+            // Clear error message
+            if (yeniDepoErrorMessage) {
+              yeniDepoErrorMessage.classList.add('hidden');
+              yeniDepoErrorMessage.textContent = '';
+            }
+            // Reset calculated field
+            calculateKullanilabilirKapasite();
+          }
+        }
+
+        // Calculate kullanilabilir_kapasite_db
+        function calculateKullanilabilirKapasite() {
+          const kapasiteInput = document.getElementById('depo-kapasite');
+          const oranInput = document.getElementById('depo-kullanilabilir-oran');
+          const kullanilabilirKapasiteInput = document.getElementById('depo-kullanilabilir-kapasite');
+          
+          if (!kapasiteInput || !oranInput || !kullanilabilirKapasiteInput) return;
+          
+          const kapasite = parseFloat(kapasiteInput.value) || 0;
+          const oran = parseFloat(oranInput.value) || 0;
+          
+          let calculatedValue = null;
+          if (kapasite > 0 && oran > 0) {
+            calculatedValue = kapasite * (oran / 100);
+            // Round to 2 decimal places
+            calculatedValue = Math.round(calculatedValue * 100) / 100;
+          } else if (kapasite > 0 && oran === 0) {
+            calculatedValue = 0;
+          }
+          
+          if (calculatedValue !== null) {
+            kullanilabilirKapasiteInput.value = calculatedValue.toFixed(2);
+          } else {
+            kullanilabilirKapasiteInput.value = '';
+          }
+        }
+
+        // Photo preview functionality
+        function updatePhotoPreview() {
+          if (!depoPhotosInput || !photoPreviewContainer || !photoPreviewGrid) return;
+          
+          const files = depoPhotosInput.files;
+          
+          if (files.length === 0) {
+            photoPreviewContainer.classList.add('hidden');
+            photoPreviewGrid.innerHTML = '';
+            return;
+          }
+          
+          photoPreviewContainer.classList.remove('hidden');
+          photoPreviewGrid.innerHTML = '';
+          
+          Array.from(files).forEach((file, index) => {
+            if (!file.type.startsWith('image/')) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              const previewItem = document.createElement('div');
+              previewItem.className = 'photo-preview-item';
+              previewItem.innerHTML = `
+                <img src="${e.target.result}" alt="Preview ${index + 1}" />
+                <button type="button" class="photo-preview-remove" data-index="${index}">×</button>
+              `;
+              photoPreviewGrid.appendChild(previewItem);
+              
+              // Remove button handler
+              const removeBtn = previewItem.querySelector('.photo-preview-remove');
+              if (removeBtn) {
+                removeBtn.addEventListener('click', function() {
+                  const dt = new DataTransfer();
+                  Array.from(depoPhotosInput.files).forEach((f, i) => {
+                    if (i !== index) dt.items.add(f);
+                  });
+                  depoPhotosInput.files = dt.files;
+                  updatePhotoPreview();
+                });
+              }
+            };
+            reader.readAsDataURL(file);
+          });
+        }
+
+        // Event listeners for Yeni Depo Modal
+        if (yeniDepoBtn) {
+          yeniDepoBtn.addEventListener('click', openYeniDepoModal);
+        }
+        if (yeniDepoModalBackdrop) {
+          yeniDepoModalBackdrop.addEventListener('click', closeYeniDepoModal);
+        }
+        if (yeniDepoModalClose) {
+          yeniDepoModalClose.addEventListener('click', closeYeniDepoModal);
+        }
+        if (yeniDepoCancelBtn) {
+          yeniDepoCancelBtn.addEventListener('click', closeYeniDepoModal);
+        }
+        if (depoPhotosInput) {
+          depoPhotosInput.addEventListener('change', updatePhotoPreview);
+        }
+
+        // Auto-calculate kullanilabilir_kapasite_db when kapasite_db or kullanilabilir_oran changes
+        const depoKapasiteInput = document.getElementById('depo-kapasite');
+        const depoOranInput = document.getElementById('depo-kullanilabilir-oran');
+        
+        if (depoKapasiteInput) {
+          depoKapasiteInput.addEventListener('input', calculateKullanilabilirKapasite);
+          depoKapasiteInput.addEventListener('change', calculateKullanilabilirKapasite);
+        }
+        
+        if (depoOranInput) {
+          depoOranInput.addEventListener('input', calculateKullanilabilirKapasite);
+          depoOranInput.addEventListener('change', calculateKullanilabilirKapasite);
+        }
+
+        // Form submission
+        if (yeniDepoForm) {
+          yeniDepoForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const saveBtn = document.getElementById('yeni-depo-save-btn');
+            const originalText = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="btn-icon">⏳</span> Kaydediliyor...';
+            
+            if (yeniDepoErrorMessage) {
+              yeniDepoErrorMessage.classList.add('hidden');
+              yeniDepoErrorMessage.textContent = '';
+            }
+            
+            try {
+              const formData = new FormData(yeniDepoForm);
+              
+              const response = await fetch('/api/depolar', {
+                method: 'POST',
+                body: formData
+              });
+              
+              const data = await response.json();
+              
+              if (!response.ok) {
+                throw new Error(data.error || 'Depo oluşturulurken bir hata oluştu.');
+              }
+              
+              if (data.success) {
+                // Close modal
+                closeYeniDepoModal();
+                
+                // Refresh depots table
+                loadDepotsTable();
+                
+                // Refresh map markers
+                if (depoMapInitialized && depoMap) {
+                  // Clear existing markers (except business)
+                  depoMarkers.forEach((marker) => {
+                    depoMap.removeLayer(marker);
+                  });
+                  depoMarkers.clear();
+                  
+                  // Reload depots and add markers
+                  fetch('/api/depots')
+                    .then(response => response.json())
+                    .then(depolar => {
+                      if (Array.isArray(depolar)) {
+                        depolar.forEach(depo => {
+                          const lat = depo.latitude ?? depo.enlem;
+                          const lng = depo.longitude ?? depo.boylam;
+                          if (!lat || !lng) return;
+                          
+                          const marker = L.marker([lat, lng]).addTo(depoMap);
+                          const name = depo.name || depo.depo_adi || 'Depo';
+                          marker.bindPopup(`<strong>${name}</strong>`);
+                          
+                          const depoId = depo.id || depo.lokasyon_id;
+                          if (depoId) {
+                            depoMarkers.set(depoId, marker);
+                          }
+                        });
+                        
+                        // Fit bounds to show all markers
+                        const allMarkers = Array.from(depoMarkers.values());
+                        if (allMarkers.length > 0) {
+                          const businessMarker = Array.from(depoMarkers.values())[0];
+                          if (businessMarker) {
+                            const group = new L.featureGroup([businessMarker, ...allMarkers]);
+                            depoMap.fitBounds(group.getBounds().pad(0.1));
+                          }
+                        }
+                      }
+                    })
+                    .catch(err => {
+                      console.error('❌ Depo verileri yüklenirken hata:', err);
+                    });
+                }
+                
+                // Show success message (optional)
+                console.log('✅ Depo başarıyla oluşturuldu:', data);
+              }
+            } catch (error) {
+              console.error('❌ Depo oluşturma hatası:', error);
+              if (yeniDepoErrorMessage) {
+                yeniDepoErrorMessage.textContent = error.message || 'Depo oluşturulurken bir hata oluştu.';
+                yeniDepoErrorMessage.classList.remove('hidden');
+              }
+            } finally {
+              saveBtn.disabled = false;
+              saveBtn.innerHTML = originalText;
+            }
+          });
+        }
+
+        // ESC key to close modal
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && yeniDepoModal && !yeniDepoModal.classList.contains('hidden')) {
+            closeYeniDepoModal();
+          }
+        });
       });
 
+      // Delete confirmation modal functions
+      let pendingDeleteLokasyonId = null;
+      
+      function showDeleteConfirmation(lokasyonId, depoAd) {
+        pendingDeleteLokasyonId = lokasyonId;
+        const modal = document.getElementById('delete-depot-modal');
+        const message = document.getElementById('delete-depot-message');
+        if (message) {
+          message.textContent = `"${depoAd}" adlı depo listeden kaldırılacak. Geri alınabilir.`;
+        }
+        if (modal) {
+          modal.classList.remove('hidden');
+          if (typeof lockBodyScroll === 'function') {
+            lockBodyScroll(true);
+          }
+        }
+      }
+      
+      function closeDeleteConfirmationModal() {
+        pendingDeleteLokasyonId = null;
+        const modal = document.getElementById('delete-depot-modal');
+        if (modal) {
+          modal.classList.add('hidden');
+          if (typeof lockBodyScroll === 'function') {
+            lockBodyScroll(false);
+          }
+        }
+      }
+      
+      async function softDeleteDepot(lokasyonId) {
+        try {
+          const response = await fetch(`/api/depolar/${lokasyonId}/soft-delete`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          const data = await response.json();
+          
+          // Handle both old format (success) and new format (ok)
+          const isSuccess = data.ok === true || data.success === true;
+          
+          if (isSuccess) {
+            // Show success message
+            showToast(data.message || 'Depo başarıyla silindi.', 'success');
+            
+            // Remove marker from map
+            if (typeof removeMarker === 'function') {
+              removeMarker(lokasyonId);
+            }
+            
+            // Reload depots table
+            if (typeof loadDepotsTable === 'function') {
+              loadDepotsTable();
+            }
+            
+            // Reload map markers
+            if (typeof loadDepotsForMap === 'function') {
+              loadDepotsForMap();
+            }
+          } else {
+            // Show error message from server
+            const errorMsg = data.message || data.error || 'Depo silinirken bir hata oluştu.';
+            showToast(errorMsg, 'error');
+          }
+        } catch (error) {
+          console.error('❌ Error soft deleting depot:', error);
+          showToast('Depo silinirken bir hata oluştu: ' + (error.message || 'Bilinmeyen hata'), 'error');
+        }
+      }
+      
+      async function markDepotAsOwned(lokasyonId, buttonElement) {
+        try {
+          const response = await fetch(`/api/depolar/${lokasyonId}/satin-al`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          const data = await response.json();
+          
+          // Handle both old format (success) and new format (ok)
+          const isSuccess = data.ok === true || data.success === true;
+          
+          if (isSuccess) {
+            // Show success message
+            showToast(data.message || 'Depo satın alındı olarak işaretlendi.', 'success');
+            
+            // Update button state
+            if (buttonElement) {
+              buttonElement.disabled = true;
+              buttonElement.classList.add('disabled');
+            }
+            
+            // Update row to show owned badge
+            const row = document.querySelector(`tr[data-lokasyon-id="${lokasyonId}"]`);
+            if (row) {
+              row.dataset.owned = '1';
+              const nameCell = row.querySelector('td[data-label="Depo Adı"]');
+              if (nameCell && !nameCell.querySelector('.owned-badge')) {
+                const nameText = nameCell.querySelector('strong').textContent;
+                nameCell.innerHTML = `<strong>${nameText}</strong> <span class="owned-badge">✅ Satın Alındı</span>`;
+              }
+            }
+            
+            // Update marker popup if function exists
+            if (typeof updateMarkerPopup === 'function') {
+              updateMarkerPopup(lokasyonId, { sahip_miyiz: 1 });
+            }
+          } else {
+            // Show error message from server
+            const errorMsg = data.message || data.error || 'Depo güncellenirken bir hata oluştu.';
+            showToast(errorMsg, 'error');
+          }
+        } catch (error) {
+          console.error('❌ Error marking depot as owned:', error);
+          showToast('Depo güncellenirken bir hata oluştu: ' + (error.message || 'Bilinmeyen hata'), 'error');
+        }
+      }
+      
+      // Simple toast notification function
+      function showToast(message, type = 'info') {
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        toast.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          padding: 12px 24px;
+          background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+          color: white;
+          border-radius: 8px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          z-index: 10000;
+          animation: slideIn 0.3s ease-out;
+        `;
+        
+        document.body.appendChild(toast);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+          toast.style.animation = 'slideOut 0.3s ease-out';
+          setTimeout(() => {
+            if (toast.parentNode) {
+              toast.parentNode.removeChild(toast);
+            }
+          }, 300);
+        }, 3000);
+      }
+      
       function logout() {
         // Hem sessionStorage hem localStorage temizle (her ihtimale karşı)
         sessionStorage.removeItem('liderElektrikLoggedIn');
@@ -912,6 +2100,40 @@
         // Redirect to login page
         window.location.href = '/login.html';
       }
+      
+      // Delete confirmation modal event listeners
+      document.addEventListener('DOMContentLoaded', function() {
+        const deleteModal = document.getElementById('delete-depot-modal');
+        const deleteModalBackdrop = document.getElementById('delete-depot-modal-backdrop');
+        const deleteModalClose = document.getElementById('delete-depot-modal-close-btn');
+        const deleteCancelBtn = document.getElementById('delete-depot-cancel-btn');
+        const deleteConfirmBtn = document.getElementById('delete-depot-confirm-btn');
+        
+        if (deleteModalBackdrop) {
+          deleteModalBackdrop.addEventListener('click', closeDeleteConfirmationModal);
+        }
+        if (deleteModalClose) {
+          deleteModalClose.addEventListener('click', closeDeleteConfirmationModal);
+        }
+        if (deleteCancelBtn) {
+          deleteCancelBtn.addEventListener('click', closeDeleteConfirmationModal);
+        }
+        if (deleteConfirmBtn) {
+          deleteConfirmBtn.addEventListener('click', async function() {
+            if (pendingDeleteLokasyonId) {
+              await softDeleteDepot(pendingDeleteLokasyonId);
+              closeDeleteConfirmationModal();
+            }
+          });
+        }
+        
+        // ESC key to close delete modal
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && deleteModal && !deleteModal.classList.contains('hidden')) {
+            closeDeleteConfirmationModal();
+          }
+        });
+      });
     </script>
 </body>
 </html>

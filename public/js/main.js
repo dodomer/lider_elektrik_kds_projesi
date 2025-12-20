@@ -1557,7 +1557,10 @@ function formatCurrencyTL(amount) {
 function openAddProductModal() {
     if (elements.addProductModal) {
         elements.addProductModal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        // Lock body scroll
+        const scrollY = window.scrollY;
+        document.body.classList.add('modal-open');
+        document.body.style.top = `-${scrollY}px`;
         
         // Load categories if not already loaded
         if (!categoriesLoaded) {
@@ -1585,7 +1588,13 @@ function openAddProductModal() {
 function closeAddProductModal() {
     if (elements.addProductModal) {
         elements.addProductModal.classList.add('hidden');
-        document.body.style.overflow = ''; // Restore scrolling
+        // Unlock body scroll
+        const scrollY = document.body.style.top;
+        document.body.classList.remove('modal-open');
+        document.body.style.top = '';
+        if (scrollY) {
+            window.scrollTo(0, parseInt(scrollY.replace('-', '')) || 0);
+        }
     }
 }
 
@@ -2102,7 +2111,10 @@ function openEditProductModal(button) {
     
     if (elements.editProductModal) {
         elements.editProductModal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
+        // Lock body scroll
+        const scrollY = window.scrollY;
+        document.body.classList.add('modal-open');
+        document.body.style.top = `-${scrollY}px`;
         
         // Fill form fields
         if (elements.editProductId) elements.editProductId.value = productId;
@@ -2124,7 +2136,13 @@ function openEditProductModal(button) {
 function closeEditProductModal() {
     if (elements.editProductModal) {
         elements.editProductModal.classList.add('hidden');
-        document.body.style.overflow = '';
+        // Unlock body scroll
+        const scrollY = document.body.style.top;
+        document.body.classList.remove('modal-open');
+        document.body.style.top = '';
+        if (scrollY) {
+            window.scrollTo(0, parseInt(scrollY.replace('-', '')) || 0);
+        }
         currentEditProductId = null;
         currentEditProductName = '';
     }
@@ -2377,6 +2395,10 @@ async function handleEditProductSubmit(event) {
 function openDeleteConfirmModal() {
     if (elements.deleteConfirmModal) {
         elements.deleteConfirmModal.classList.remove('hidden');
+        // Lock body scroll
+        const scrollY = window.scrollY;
+        document.body.classList.add('modal-open');
+        document.body.style.top = `-${scrollY}px`;
         
         // Show product name in confirmation
         if (elements.deleteProductName) {
@@ -2392,6 +2414,13 @@ function openDeleteConfirmModal() {
 function closeDeleteConfirmModal() {
     if (elements.deleteConfirmModal) {
         elements.deleteConfirmModal.classList.add('hidden');
+        // Unlock body scroll
+        const scrollY = document.body.style.top;
+        document.body.classList.remove('modal-open');
+        document.body.style.top = '';
+        if (scrollY) {
+            window.scrollTo(0, parseInt(scrollY.replace('-', '')) || 0);
+        }
     }
 }
 

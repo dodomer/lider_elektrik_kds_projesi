@@ -65,6 +65,9 @@ app.get('/', (req, res) => {
 // Serve static files from the /public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Serve images statically
+app.use('/images', express.static(path.join(__dirname, 'public', 'images')));
+
 // Fallback: serve index.html for any unmatched routes (SPA-style)
 // This must come AFTER API routes to avoid catching /api/* requests
 app.get('*', (req, res) => {

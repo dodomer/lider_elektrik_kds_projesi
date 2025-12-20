@@ -8,10 +8,48 @@
 
 const express = require('express');
 const router = express.Router();
-
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 // Database module
 const db = require('../db');
+
+// Configure multer for photo uploads
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const uploadDir = path.join(__dirname, '..', 'public', 'images', 'depolar');
+        // Ensure directory exists
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        // Generate unique filename: depo_<timestamp>_<random>.<ext>
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substring(2, 15);
+        const ext = path.extname(file.originalname);
+        cb(null, `depo_${timestamp}_${random}${ext}`);
+    }
+});
+
+const fileFilter = (req, file, cb) => {
+    // Accept only images
+    if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+    } else {
+        cb(new Error('Sadece resim dosyaları kabul edilir.'), false);
+    }
+};
+
+const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB per file
+    }
+});
 
 // OpenAI client
 const OpenAI = require('openai');
@@ -100,7 +138,7 @@ router.get('/kds/summary', async (req, res) => {
                 FROM lokasyonlar l
                 LEFT JOIN stoklar s ON s.lokasyon_id = l.lokasyon_id
                 LEFT JOIN urunler u ON u.urun_id = s.urun_id AND u.aktif_mi = 1
-                WHERE l.tur = 'depo'
+                WHERE l.tur = 'depo' AND (l.aktif_mi = 1 OR l.aktif_mi IS NULL)
                 GROUP BY l.lokasyon_id, l.kullanilabilir_kapasite_db
                 HAVING doluluk_orani >= 80
             ) AS critical_depots
@@ -218,9 +256,10 @@ router.get('/depots', async (req, res) => {
                 enlem       AS latitude,
                 boylam      AS longitude,
                 tur,
-                adres
+                adres,
+                sahip_miyiz
             FROM lokasyonlar
-            WHERE tur = 'depo'
+            WHERE tur = 'depo' AND (aktif_mi = 1 OR aktif_mi IS NULL)
         `;
         const depots = await db.query(sql);
         return res.json(depots);
@@ -228,6 +267,623 @@ router.get('/depots', async (req, res) => {
         console.error('❌ Error fetching depots:', error.message);
         return res.status(500).json({
             error: 'Depo verileri alınırken bir hata oluştu.'
+        });
+    }
+});
+
+/**
+ * GET /api/business
+ * Returns our own business location (magaza where sahip_miyiz=1)
+ * Returns: { lokasyon_id, ad, adres, enlem, boylam }
+ */
+router.get('/business', async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    try {
+        const sql = `
+            SELECT 
+                lokasyon_id,
+                ad,
+                adres,
+                enlem,
+                boylam
+            FROM lokasyonlar
+            WHERE tur = 'magaza' AND sahip_miyiz = 1
+            LIMIT 1
+        `;
+        const result = await db.query(sql);
+        
+        if (result.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Ana mağaza konumu bulunamadı. Veritabanında tur=\'magaza\' ve sahip_miyiz=1 olan bir kayıt olmalıdır.'
+            });
+        }
+        
+        const business = result[0];
+        
+        // Validate coordinates
+        if (business.enlem === null || business.boylam === null || 
+            isNaN(parseFloat(business.enlem)) || isNaN(parseFloat(business.boylam))) {
+            return res.status(400).json({
+                success: false,
+                error: 'Ana mağaza konumunun koordinatları (enlem/boylam) eksik veya geçersiz. Lütfen veritabanında kontrol edin.'
+            });
+        }
+        
+        return res.json({
+            lokasyon_id: business.lokasyon_id,
+            ad: business.ad,
+            adres: business.adres,
+            enlem: parseFloat(business.enlem),
+            boylam: parseFloat(business.boylam)
+        });
+    } catch (error) {
+        console.error('❌ Error fetching business location:', error.message);
+        return res.status(500).json({
+            success: false,
+            error: 'Ana mağaza konumu alınırken bir hata oluştu.',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * Calculate distance between two coordinates using Haversine formula
+ * @param {number} lat1 - Latitude of first point
+ * @param {number} lon1 - Longitude of first point
+ * @param {number} lat2 - Latitude of second point
+ * @param {number} lon2 - Longitude of second point
+ * @returns {number} Distance in kilometers
+ */
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+/**
+ * GET /api/depolar-detay
+ * Returns warehouses with all fields plus distance from business location
+ * Returns: { business: {...}, depolar: [{...all fields..., distance_km}] }
+ */
+router.get('/depolar-detay', async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    try {
+        // First, get business location
+        const businessSql = `
+            SELECT 
+                lokasyon_id,
+                ad,
+                enlem,
+                boylam
+            FROM lokasyonlar
+            WHERE tur = 'magaza' AND sahip_miyiz = 1
+            LIMIT 1
+        `;
+        const businessResult = await db.query(businessSql);
+        
+        if (businessResult.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Ana mağaza konumu bulunamadı.'
+            });
+        }
+        
+        const business = businessResult[0];
+        const businessLat = parseFloat(business.enlem);
+        const businessLng = parseFloat(business.boylam);
+        
+        if (isNaN(businessLat) || isNaN(businessLng)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Ana mağaza koordinatları geçersiz.'
+            });
+        }
+        
+        // Get all warehouses with all fields and photos (only active depots)
+        const depotsSql = `
+            SELECT 
+                l.lokasyon_id,
+                l.ad,
+                l.tur,
+                l.adres,
+                l.enlem,
+                l.boylam,
+                l.metrekare,
+                l.yukseklik_m,
+                l.kapasite_db,
+                l.kullanilabilir_oran,
+                l.kullanilabilir_kapasite_db,
+                l.aylik_kira,
+                l.sahip_miyiz,
+                l.aktif_mi,
+                df.foto_url
+            FROM lokasyonlar l
+            LEFT JOIN depo_fotograflari df ON l.lokasyon_id = df.lokasyon_id
+            WHERE l.tur = 'depo' AND (l.aktif_mi = 1 OR l.aktif_mi IS NULL)
+            ORDER BY l.lokasyon_id ASC, df.id ASC
+        `;
+        
+        const depotsRaw = await db.query(depotsSql);
+        
+        // Group warehouses by lokasyon_id and collect photos
+        const depotsMap = new Map();
+        
+        depotsRaw.forEach(row => {
+            const lokasyonId = row.lokasyon_id;
+            
+            if (!depotsMap.has(lokasyonId)) {
+                // First occurrence of this warehouse - create entry
+                depotsMap.set(lokasyonId, {
+                    lokasyon_id: row.lokasyon_id,
+                    ad: row.ad,
+                    tur: row.tur,
+                    adres: row.adres,
+                    enlem: row.enlem,
+                    boylam: row.boylam,
+                    metrekare: row.metrekare,
+                    yukseklik_m: row.yukseklik_m,
+                    kapasite_db: row.kapasite_db,
+                    kullanilabilir_oran: row.kullanilabilir_oran,
+                    kullanilabilir_kapasite_db: row.kullanilabilir_kapasite_db,
+                    aylik_kira: row.aylik_kira,
+                    sahip_miyiz: row.sahip_miyiz,
+                    photos: []
+                });
+            }
+            
+            // Add photo if it exists
+            if (row.foto_url) {
+                const depot = depotsMap.get(lokasyonId);
+                depot.photos.push({ foto_url: row.foto_url });
+            }
+        });
+        
+        // Convert map to array
+        const depots = Array.from(depotsMap.values());
+        
+        // Calculate distance for each warehouse
+        const depotsWithDistance = depots.map(depot => {
+            const depotLat = parseFloat(depot.enlem);
+            const depotLng = parseFloat(depot.boylam);
+            
+            let distance_km = null;
+            if (!isNaN(depotLat) && !isNaN(depotLng)) {
+                distance_km = calculateDistance(businessLat, businessLng, depotLat, depotLng);
+                // Round to 2 decimal places
+                distance_km = Math.round(distance_km * 100) / 100;
+            }
+            
+            return {
+                ...depot,
+                distance_km: distance_km
+            };
+        });
+        
+        // Sort by distance (nulls last)
+        depotsWithDistance.sort((a, b) => {
+            if (a.distance_km === null && b.distance_km === null) return 0;
+            if (a.distance_km === null) return 1;
+            if (b.distance_km === null) return -1;
+            return a.distance_km - b.distance_km;
+        });
+        
+        return res.json({
+            success: true,
+            business: {
+                lokasyon_id: business.lokasyon_id,
+                ad: business.ad,
+                enlem: businessLat,
+                boylam: businessLng
+            },
+            depolar: depotsWithDistance
+        });
+    } catch (error) {
+        console.error('❌ Error fetching depots with details:', error.message);
+        return res.status(500).json({
+            success: false,
+            error: 'Depo detayları alınırken bir hata oluştu.',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/depolar
+ * Create a new warehouse (depo) with optional photos
+ * Accepts multipart/form-data with fields and photos[]
+ */
+router.post('/depolar', upload.array('photos', 10), async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    
+    try {
+        // Validate required fields
+        const { ad, enlem, boylam } = req.body;
+        
+        if (!ad || ad.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                error: 'Depo adı zorunludur.'
+            });
+        }
+        
+        if (!enlem || isNaN(parseFloat(enlem))) {
+            return res.status(400).json({
+                success: false,
+                error: 'Geçerli bir enlem (latitude) değeri gerekli.'
+            });
+        }
+        
+        if (!boylam || isNaN(parseFloat(boylam))) {
+            return res.status(400).json({
+                success: false,
+                error: 'Geçerli bir boylam (longitude) değeri gerekli.'
+            });
+        }
+        
+        // Prepare data for insertion
+        // NOTE: kullanilabilir_kapasite_db is a GENERATED column in MySQL
+        // DO NOT include it in INSERT - MySQL will calculate it automatically
+        
+        const depoData = {
+            tur: 'depo',
+            ad: ad.trim(),
+            adres: req.body.adres || null,
+            enlem: parseFloat(enlem),
+            boylam: parseFloat(boylam),
+            metrekare: req.body.metrekare ? parseFloat(req.body.metrekare) : null,
+            yukseklik_m: req.body.yukseklik_m ? parseFloat(req.body.yukseklik_m) : null,
+            kapasite_db: req.body.kapasite_db ? parseInt(req.body.kapasite_db) : null,
+            kullanilabilir_oran: req.body.kullanilabilir_oran ? parseFloat(req.body.kullanilabilir_oran) : null,
+            // kullanilabilir_kapasite_db is GENERATED - do not include in INSERT
+            aylik_kira: req.body.aylik_kira ? parseFloat(req.body.aylik_kira) : null,
+            sahip_miyiz: 0 // Default: not owned
+        };
+        
+        // Insert warehouse into database (excluding generated column)
+        // Note: aktif_mi defaults to 1 if column exists
+        const insertSql = `
+            INSERT INTO lokasyonlar (
+                tur, ad, adres, enlem, boylam, metrekare, yukseklik_m,
+                kapasite_db, kullanilabilir_oran,
+                aylik_kira, sahip_miyiz, aktif_mi
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        `;
+        
+        const insertParams = [
+            depoData.tur,
+            depoData.ad,
+            depoData.adres,
+            depoData.enlem,
+            depoData.boylam,
+            depoData.metrekare,
+            depoData.yukseklik_m,
+            depoData.kapasite_db,
+            depoData.kullanilabilir_oran,
+            depoData.aylik_kira,
+            depoData.sahip_miyiz,
+            1 // aktif_mi = 1 (active by default)
+        ];
+        
+        const insertResult = await db.query(insertSql, insertParams);
+        // For INSERT queries, mysql2 returns an object with insertId property
+        const lokasyonId = insertResult.insertId;
+        
+        if (!lokasyonId) {
+            return res.status(500).json({
+                success: false,
+                error: 'Depo oluşturulurken bir hata oluştu.'
+            });
+        }
+        
+        // Handle photo uploads
+        const photos = [];
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                // Store relative URL in database
+                const fotoUrl = `/images/depolar/${file.filename}`;
+                
+                const photoSql = `
+                    INSERT INTO depo_fotograflari (lokasyon_id, foto_url)
+                    VALUES (?, ?)
+                `;
+                
+                await db.query(photoSql, [lokasyonId, fotoUrl]);
+                photos.push({ foto_url: fotoUrl });
+            }
+        }
+        
+        // SELECT the created row back to get the generated column value
+        const selectSql = `
+            SELECT 
+                lokasyon_id,
+                tur,
+                ad,
+                adres,
+                enlem,
+                boylam,
+                metrekare,
+                yukseklik_m,
+                kapasite_db,
+                kullanilabilir_oran,
+                kullanilabilir_kapasite_db,
+                aylik_kira,
+                sahip_miyiz
+            FROM lokasyonlar
+            WHERE lokasyon_id = ?
+        `;
+        
+        const [createdDepot] = await db.query(selectSql, [lokasyonId]);
+        
+        if (!createdDepot) {
+            return res.status(500).json({
+                success: false,
+                error: 'Depo oluşturuldu ancak veriler alınamadı.'
+            });
+        }
+        
+        // Return created depot with photos and generated column
+        return res.json({
+            success: true,
+            lokasyon_id: createdDepot.lokasyon_id,
+            tur: createdDepot.tur,
+            ad: createdDepot.ad,
+            adres: createdDepot.adres,
+            enlem: createdDepot.enlem,
+            boylam: createdDepot.boylam,
+            metrekare: createdDepot.metrekare,
+            yukseklik_m: createdDepot.yukseklik_m,
+            kapasite_db: createdDepot.kapasite_db,
+            kullanilabilir_oran: createdDepot.kullanilabilir_oran,
+            kullanilabilir_kapasite_db: createdDepot.kullanilabilir_kapasite_db, // Generated by MySQL
+            aylik_kira: createdDepot.aylik_kira,
+            sahip_miyiz: createdDepot.sahip_miyiz,
+            photos: photos
+        });
+        
+    } catch (error) {
+        console.error('❌ Error creating depot:', error.message);
+        
+        // Clean up uploaded files if depot creation failed
+        if (req.files && req.files.length > 0) {
+            req.files.forEach(file => {
+                const filePath = path.join(__dirname, '..', 'public', 'images', 'depolar', file.filename);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            });
+        }
+        
+        return res.status(500).json({
+            success: false,
+            error: 'Depo oluşturulurken bir hata oluştu.',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * PATCH /api/depolar/:lokasyon_id/soft-delete
+ * Soft deletes a depot by setting aktif_mi = 0
+ * Only works for tur='depo', never for business location (tur='magaza' or sahip_miyiz=1)
+ */
+router.patch('/depolar/:lokasyon_id/soft-delete', async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    
+    try {
+        const { lokasyon_id } = req.params;
+        const lokasyonId = parseInt(lokasyon_id);
+        
+        if (!lokasyonId || isNaN(lokasyonId)) {
+            return res.status(400).json({
+                ok: false,
+                message: 'Geçersiz depo ID.'
+            });
+        }
+        
+        // Check if location exists - use correct PK column (lokasyon_id)
+        const checkSql = `
+            SELECT lokasyon_id, tur, sahip_miyiz, aktif_mi
+            FROM lokasyonlar
+            WHERE lokasyon_id = ?
+            LIMIT 1
+        `;
+        const locationResult = await db.query(checkSql, [lokasyonId]);
+        
+        // Handle different return formats from db.query
+        const location = Array.isArray(locationResult) && locationResult.length > 0 
+            ? (Array.isArray(locationResult[0]) ? locationResult[0] : locationResult)
+            : locationResult;
+        
+        // Guard check: If no row is found, return 404
+        if (!location || (Array.isArray(location) && location.length === 0) || !location[0]) {
+            return res.status(404).json({
+                ok: false,
+                message: 'Depo bulunamadı.'
+            });
+        }
+        
+        // Get the first row safely
+        const depotRow = Array.isArray(location) ? location[0] : location;
+        
+        // Guard check: If row.tur !== 'depo', return 400
+        if (!depotRow.tur || depotRow.tur !== 'depo') {
+            return res.status(400).json({
+                ok: false,
+                message: 'Sadece depolar silinebilir.'
+            });
+        }
+        
+        // Guard check: If row.sahip_miyiz = 1, return 400
+        if (depotRow.sahip_miyiz === 1) {
+            return res.status(400).json({
+                ok: false,
+                message: 'Satın alınmış depo silinemez.'
+            });
+        }
+        
+        // Check if already deleted
+        if (depotRow.aktif_mi === 0) {
+            return res.status(400).json({
+                ok: false,
+                message: 'Bu depo zaten silinmiş.'
+            });
+        }
+        
+        // Perform soft delete safely
+        const updateSql = 'UPDATE lokasyonlar SET aktif_mi = 0 WHERE lokasyon_id = ? AND tur = \'depo\'';
+        const updateResult = await db.query(updateSql, [lokasyonId]);
+        
+        // Handle different return formats
+        const affectedRows = updateResult?.affectedRows || (Array.isArray(updateResult) && updateResult[0]?.affectedRows) || 0;
+        
+        if (affectedRows === 0) {
+            return res.status(500).json({
+                ok: false,
+                message: 'Depo silinirken bir hata oluştu.'
+            });
+        }
+        
+        console.log(`🗑️ Soft deleted depot (ID: ${lokasyonId})`);
+        
+        return res.json({
+            ok: true,
+            message: 'Depo başarıyla silindi.',
+            lokasyon_id: lokasyonId
+        });
+        
+    } catch (error) {
+        console.error('❌ Error soft deleting depot:', error.message);
+        console.error('❌ Full error:', error);
+        
+        // If column doesn't exist, provide helpful error
+        if (error.message && (error.message.includes('Unknown column') || error.message.includes('aktif_mi'))) {
+            return res.status(500).json({
+                ok: false,
+                message: 'Veritabanı hatası: aktif_mi sütunu bulunamadı. Lütfen veritabanı şemasını kontrol edin.'
+            });
+        }
+        
+        return res.status(500).json({
+            ok: false,
+            message: 'Depo silinirken bir hata oluştu: ' + (error.message || 'Bilinmeyen hata')
+        });
+    }
+});
+
+/**
+ * PATCH /api/depolar/:lokasyon_id/satin-al
+ * Marks a depot as owned by setting sahip_miyiz = 1
+ * Only works for tur='depo'
+ */
+router.patch('/depolar/:lokasyon_id/satin-al', async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    
+    try {
+        const { lokasyon_id } = req.params;
+        const lokasyonId = parseInt(lokasyon_id);
+        
+        if (!lokasyonId || isNaN(lokasyonId)) {
+            return res.status(400).json({
+                ok: false,
+                message: 'Geçersiz depo ID.'
+            });
+        }
+        
+        // Check if location exists - use correct PK column (lokasyon_id)
+        const checkSql = `
+            SELECT lokasyon_id, tur, sahip_miyiz, aktif_mi
+            FROM lokasyonlar
+            WHERE lokasyon_id = ?
+            LIMIT 1
+        `;
+        const locationResult = await db.query(checkSql, [lokasyonId]);
+        
+        // Handle different return formats from db.query
+        const location = Array.isArray(locationResult) && locationResult.length > 0 
+            ? (Array.isArray(locationResult[0]) ? locationResult[0] : locationResult)
+            : locationResult;
+        
+        // Guard check: If no row is found, return 404
+        if (!location || (Array.isArray(location) && location.length === 0) || !location[0]) {
+            return res.status(404).json({
+                ok: false,
+                message: 'Depo bulunamadı.'
+            });
+        }
+        
+        // Get the first row safely
+        const depotRow = Array.isArray(location) ? location[0] : location;
+        
+        // Guard check: If row.tur !== 'depo', return 400
+        if (!depotRow.tur || depotRow.tur !== 'depo') {
+            return res.status(400).json({
+                ok: false,
+                message: 'Sadece depolar için bu işlem yapılabilir.'
+            });
+        }
+        
+        // Check if already owned
+        if (depotRow.sahip_miyiz === 1) {
+            return res.status(400).json({
+                ok: false,
+                message: 'Bu depo zaten satın alınmış.'
+            });
+        }
+        
+        // Mark as owned: Set sahip_miyiz = 1
+        const updateSql = 'UPDATE lokasyonlar SET sahip_miyiz = 1 WHERE lokasyon_id = ? AND tur = \'depo\'';
+        const updateResult = await db.query(updateSql, [lokasyonId]);
+        
+        // Handle different return formats
+        const affectedRows = updateResult?.affectedRows || (Array.isArray(updateResult) && updateResult[0]?.affectedRows) || 0;
+        
+        if (affectedRows === 0) {
+            return res.status(500).json({
+                ok: false,
+                message: 'Depo güncellenirken bir hata oluştu.'
+            });
+        }
+        
+        console.log(`✅ Marked depot as owned (ID: ${lokasyonId})`);
+        
+        // Return updated depot data
+        const selectSql = `
+            SELECT 
+                lokasyon_id,
+                ad,
+                tur,
+                sahip_miyiz,
+                aylik_kira
+            FROM lokasyonlar
+            WHERE lokasyon_id = ?
+            LIMIT 1
+        `;
+        const updatedResult = await db.query(selectSql, [lokasyonId]);
+        const updatedDepot = Array.isArray(updatedResult) && updatedResult.length > 0
+            ? (Array.isArray(updatedResult[0]) ? updatedResult[0][0] : updatedResult[0])
+            : null;
+        
+        return res.json({
+            ok: true,
+            message: 'Depo satın alındı olarak işaretlendi.',
+            lokasyon_id: lokasyonId,
+            sahip_miyiz: 1,
+            depot: updatedDepot
+        });
+        
+    } catch (error) {
+        console.error('❌ Error marking depot as owned:', error.message);
+        console.error('❌ Full error:', error);
+        return res.status(500).json({
+            ok: false,
+            message: 'Depo güncellenirken bir hata oluştu: ' + (error.message || 'Bilinmeyen hata')
         });
     }
 });
@@ -766,7 +1422,7 @@ router.get('/en-uygun-depolar', async (req, res) => {
                 kapasite_db,
                 kullanilabilir_kapasite_db
             FROM lokasyonlar
-            WHERE tur = 'depo'
+            WHERE tur = 'depo' AND (aktif_mi = 1 OR aktif_mi IS NULL)
             ORDER BY lokasyon_id ASC
         `;
         
@@ -1733,7 +2389,7 @@ router.get('/depots', async (req, res) => {
             tur,
             adres
           FROM lokasyonlar
-          WHERE tur = 'depo';
+          WHERE tur = 'depo' AND (aktif_mi = 1 OR aktif_mi IS NULL);
         `;
 
         const result = await db.query(query); // If your DB module uses pool, use pool.query
