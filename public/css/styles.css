@@ -584,11 +584,18 @@ body {
     background: #ffffff;
     border-radius: 18px;
     box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-    overflow: hidden;
+    overflow: visible;
     transition: all var(--transition-normal);
     border: 1px solid rgba(148, 163, 184, 0.25);
     animation: fadeIn 0.5s ease forwards;
     opacity: 0;
+    position: relative;
+    z-index: 1;
+}
+
+/* Ensure card body and content areas can still clip if needed */
+.card-body {
+    overflow: visible;
 }
 
 .card:hover {
@@ -603,6 +610,9 @@ body {
     padding: var(--space-lg);
     border-bottom: 1px solid var(--border-light);
     background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-card-hover) 100%);
+    position: relative;
+    z-index: 2;
+    overflow: visible;
 }
 
 .card-icon {
@@ -1096,6 +1106,12 @@ body {
     flex-wrap: wrap;
 }
 
+.card-header-chart .card-header-left h3 {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+}
+
 /* Monthly Total Ciro badge */
 .monthly-total-ciro {
     display: flex;
@@ -1177,6 +1193,26 @@ body {
     user-select: none;
 }
 
+.chart-toggle-btn {
+    background: none;
+    border: 1px solid var(--border-light);
+    font-family: var(--font-main);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+    margin-left: var(--space-sm);
+    white-space: nowrap;
+}
+
+.chart-toggle-btn:hover {
+    color: var(--color-primary);
+    background-color: rgba(10, 37, 64, 0.05);
+    border-color: var(--color-primary);
+}
+
 /* Chart canvas styling */
 #sales-revenue-chart {
     width: 100% !important;
@@ -1202,6 +1238,8 @@ body {
 
 .card-body {
     padding: var(--space-lg);
+    overflow: visible;
+    position: relative;
 }
 
 /* =====================
@@ -2225,26 +2263,38 @@ body {
 
 /* Help Icon with Tooltip */
 .help-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    background: var(--text-muted);
-    color: white;
-    border-radius: 50%;
-    font-size: 0.7rem;
-    font-weight: 700;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 18px !important;
+    height: 18px !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 50% !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
     cursor: help;
     margin-left: var(--space-xs);
     position: relative;
     vertical-align: middle;
+    flex-shrink: 0;
+    transition: all var(--transition-fast);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    padding: 0;
 }
 
 .help-icon:hover,
 .help-icon:focus {
-    background: var(--text-secondary);
-    outline: none;
+    background: var(--color-primary) !important;
+    color: #ffffff !important;
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 2px 6px rgba(10, 37, 64, 0.25);
+    outline: 2px solid rgba(10, 37, 64, 0.2);
+    outline-offset: 2px;
+    transform: scale(1.1);
 }
 
 .help-icon .tooltip {
@@ -2282,6 +2332,64 @@ body {
 .help-icon:focus .tooltip {
     opacity: 1;
     visibility: visible;
+}
+
+/* Help icon inline (next to title) */
+.help-icon-inline {
+    margin-left: var(--space-xs);
+    vertical-align: middle;
+    position: relative;
+    z-index: 10;
+}
+
+/* Tooltip with white background for best depots help */
+.help-icon-inline .tooltip-wide {
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 0;
+    transform: translateX(0);
+    width: 320px;
+    max-width: 320px;
+    background: #ffffff;
+    color: var(--text-primary);
+    border: 1px solid var(--border-light);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    white-space: normal;
+    text-align: left;
+    padding: var(--space-md);
+    line-height: 1.6;
+    font-size: 0.875rem;
+    z-index: 9999;
+    word-wrap: break-word;
+    pointer-events: none;
+}
+
+.help-icon-inline .tooltip-wide::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 20px;
+    transform: translateX(0);
+    border: 8px solid transparent;
+    border-top-color: #ffffff;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
+}
+
+.help-icon-inline .tooltip-wide strong {
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+/* Ensure tooltip positioning for card header */
+.card-header-chart .help-icon-inline {
+    position: relative;
+    z-index: 100;
+}
+
+.card-header-chart .card-header-left {
+    position: relative;
+    z-index: 10;
+    overflow: visible;
 }
 
 /* =====================
@@ -2862,6 +2970,7 @@ body {
     grid-template-columns: repeat(2, 1fr);
     gap: var(--space-lg);
     margin-bottom: var(--space-lg);
+    align-items: start;
 }
 
 .charts-grid-main {
@@ -2902,6 +3011,20 @@ body {
     position: relative;
     height: 300px;
     width: 100%;
+}
+
+/* Chart container for revenue trend - height will be set by JS */
+#revenueTrendChartWrap {
+    position: relative;
+    width: 100%;
+    min-height: 200px;
+    /* Height will be set dynamically by JavaScript */
+}
+
+#revenueTrendChartWrap canvas {
+    height: 100% !important;
+    width: 100% !important;
+    display: block;
 }
 
 /* Responsive adjustments */
@@ -2981,15 +3104,6 @@ body {
 }
 
 /* Best Depots Styles */
-.best-depots-loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 200px;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-}
-
 .best-depots-empty {
     text-align: center;
     padding: var(--space-xl);
@@ -3001,6 +3115,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
+    margin: 0;
+    padding: 0;
 }
 
 .best-depot-item {

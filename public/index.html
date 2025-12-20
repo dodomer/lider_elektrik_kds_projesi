@@ -239,35 +239,37 @@
 
                 <!-- Main Charts Row -->
                 <div class="charts-grid charts-grid-main">
-                    <div class="card card-chart">
+                    <div class="card card-chart" id="revenueTrendCard">
                         <div class="card-header card-header-chart">
                             <div class="card-header-left">
                                 <span class="card-icon">📈</span>
                                 <h3>Son 6 Ay Ciro Trendi</h3>
+                                <button type="button" class="chart-toggle-btn" id="revenue-trend-toggle-btn">
+                                    Önümüzdeki 6 Ay Tahmini Ciro Trendi
+                                </button>
                             </div>
                             <a href="#" class="link-detail" id="link-revenue-trend" onclick="event.preventDefault(); if(window.KDS) window.KDS.showSalesDetailsSection();">Detaya Git →</a>
                         </div>
                         <div class="card-body">
-                            <div class="chart-container">
+                            <div class="chart-container" id="revenueTrendChartWrap">
                                 <canvas id="revenue-trend-chart"></canvas>
                             </div>
                         </div>
                     </div>
-                    <div class="card card-chart">
+                    <div class="card card-chart" id="bestDepotsCard">
                         <div class="card-header card-header-chart">
                             <div class="card-header-left">
                                 <span class="card-icon">🏆</span>
                                 <h3>En Uygun Depolar</h3>
+                                <span class="help-icon help-icon-inline" id="best-depots-help-icon" tabindex="0" role="button" aria-label="Uygunluk skoru hesaplama bilgisi">?
+                                    <span class="tooltip tooltip-wide">Uygunluk skoru; Mesafe, Aylık Kira ve Kapasite kriterlerinin 0–100 aralığına normalize edilip ağırlıklandırılmasıyla hesaplanır.<br><br>Ağırlıklar: Mesafe %40, Aylık Kira %35, Kapasite %25.<br><br>Formül: Skor = (MesafeSkoru×0.40) + (KiraSkoru×0.35) + (KapasiteSkoru×0.25).<br><br>Not: Yakın ve ucuz depolar daha yüksek puan alır; kapasite arttıkça puan artar.</span>
+                                </span>
                             </div>
                             <a href="#" class="link-detail" id="link-warehouse-comparison" onclick="event.preventDefault(); if(window.KDS) window.KDS.showAnalysisSection();">Detaya Git →</a>
                         </div>
                         <div class="card-body">
-                            <!-- Loading state -->
-                            <div class="best-depots-loading" id="best-depots-loading">
-                                <p>En uygun depolar hesaplanıyor...</p>
-                            </div>
                             <!-- Content -->
-                            <div class="best-depots-content hidden" id="best-depots-content">
+                            <div class="best-depots-content" id="best-depots-content">
                                 <!-- Will be populated by JavaScript -->
                             </div>
                             <!-- Empty state -->

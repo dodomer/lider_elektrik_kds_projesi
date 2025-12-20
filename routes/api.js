@@ -32,6 +32,107 @@ router.get('/enflasyon-tuik', (req, res) => {
 });
 
 // ======================
+// KDS Summary Endpoint
+// ======================
+
+/**
+ * GET /api/kds/summary
+ * Returns summary data for the Decision Panel (Yönetici Özeti)
+ * Query params: year (YYYY), month (MM, 1-12)
+ * Returns: toplamAylikCiro, satisAdedi, kritikDepoSayisi, kdsKarari
+ */
+router.get('/kds/summary', async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    
+    try {
+        // Get and validate year parameter
+        const year = parseInt(req.query.year);
+        if (!year || year < 2000 || year > 2100) {
+            return res.status(400).json({
+                success: false,
+                error: 'Geçersiz yıl. 2000-2100 arası bir yıl olmalıdır.'
+            });
+        }
+        
+        // Get and validate month parameter
+        const month = parseInt(req.query.month);
+        if (!month || month < 1 || month > 12) {
+            return res.status(400).json({
+                success: false,
+                error: 'Geçersiz ay. 1-12 arası bir ay olmalıdır.'
+            });
+        }
+        
+        console.log(`📊 /api/kds/summary - Year: ${year}, Month: ${month}`);
+        
+        // A) Calculate total monthly revenue (toplamAylikCiro)
+        const revenueSql = `
+            SELECT COALESCE(SUM(toplam_tutar), 0) AS toplam_aylik_ciro
+            FROM satislar
+            WHERE YEAR(tarih) = ? AND MONTH(tarih) = ? AND lokasyon_id = 1
+        `;
+        
+        const revenueResult = await db.query(revenueSql, [year, month]);
+        const toplamAylikCiro = parseFloat(revenueResult[0]?.toplam_aylik_ciro || 0);
+        
+        // B) Calculate total sales count (satisAdedi)
+        const salesCountSql = `
+            SELECT COALESCE(SUM(adet), 0) AS satis_adedi
+            FROM satislar
+            WHERE YEAR(tarih) = ? AND MONTH(tarih) = ? AND lokasyon_id = 1
+        `;
+        
+        const salesCountResult = await db.query(salesCountSql, [year, month]);
+        const satisAdedi = parseInt(salesCountResult[0]?.satis_adedi || 0);
+        
+        // C) Count critical depots (occupancy >= 80%)
+        const criticalDepotsSql = `
+            SELECT COUNT(*) AS kritik_depo_sayisi
+            FROM (
+                SELECT 
+                    l.lokasyon_id,
+                    l.kullanilabilir_kapasite_db,
+                    COALESCE(SUM(s.miktar * u.hacim_db), 0) AS used_db,
+                    CASE 
+                        WHEN l.kullanilabilir_kapasite_db = 0 THEN 0
+                        ELSE (COALESCE(SUM(s.miktar * u.hacim_db), 0) / l.kullanilabilir_kapasite_db) * 100
+                    END AS doluluk_orani
+                FROM lokasyonlar l
+                LEFT JOIN stoklar s ON s.lokasyon_id = l.lokasyon_id
+                LEFT JOIN urunler u ON u.urun_id = s.urun_id AND u.aktif_mi = 1
+                WHERE l.tur = 'depo'
+                GROUP BY l.lokasyon_id, l.kullanilabilir_kapasite_db
+                HAVING doluluk_orani >= 80
+            ) AS critical_depots
+        `;
+        
+        const criticalDepotsResult = await db.query(criticalDepotsSql);
+        const kritikDepoSayisi = parseInt(criticalDepotsResult[0]?.kritik_depo_sayisi || 0);
+        
+        // D) Determine KDS decision
+        const kdsKarari = kritikDepoSayisi >= 1 ? 'DIKKAT' : 'UYGUN';
+        
+        console.log(`✅ /api/kds/summary - Ciro: ${toplamAylikCiro}, Adet: ${satisAdedi}, Kritik Depo: ${kritikDepoSayisi}, Karar: ${kdsKarari}`);
+        
+        return res.json({
+            success: true,
+            toplamAylikCiro: toplamAylikCiro,
+            satisAdedi: satisAdedi,
+            kritikDepoSayisi: kritikDepoSayisi,
+            kdsKarari: kdsKarari
+        });
+    } catch (error) {
+        console.error('❌ Error fetching KDS summary:', error.message);
+        console.error('❌ Full error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Özet verileri yüklenirken bir hata oluştu.',
+            message: error.message
+        });
+    }
+});
+
+// ======================
 // Health Check Endpoint
 // ======================
 

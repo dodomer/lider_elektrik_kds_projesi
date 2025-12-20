@@ -171,6 +171,11 @@ let revenueTrendChartInstance = null;
 let topProductsSpaceChartInstance = null;
 let capacityForecastChartInstance = null;
 
+// Revenue trend chart state
+let revenueTrendViewMode = 'real'; // 'real' or 'forecast'
+const REVENUE_TREND_ORIGINAL_LABELS = ['Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım'];
+const REVENUE_TREND_ORIGINAL_DATA = [150000, 180000, 165000, 210000, 195000, 192830];
+
 // Sales chart mode: 'revenue' or 'quantity'
 let salesChartMode = 'revenue';
 
@@ -2689,14 +2694,61 @@ function initEventListeners() {
         elements.salesDetailsMonthSelect.addEventListener('change', onSalesDetailsMonthChange);
     }
 
-    // Decision Panel filter apply button (placeholder - no backend call yet)
+    // Decision Panel filter apply button
     const decisionPanelApplyBtn = document.getElementById('decision-panel-apply-btn');
     if (decisionPanelApplyBtn) {
-        decisionPanelApplyBtn.addEventListener('click', () => {
+        decisionPanelApplyBtn.addEventListener('click', async () => {
             const year = document.getElementById('decision-panel-year')?.value;
             const month = document.getElementById('decision-panel-month')?.value;
-            console.log(`Decision Panel filter: Year ${year}, Month ${month}`);
-            // TODO: Wire to backend API when endpoints are available
+            
+            if (!year || !month) {
+                console.error('Year or month not selected');
+                return;
+            }
+            
+            // Month value is already a number (12, 11, etc.)
+            const monthNum = parseInt(month);
+            const yearNum = parseInt(year);
+            
+            console.log(`📊 Decision Panel filter: Year ${yearNum}, Month ${monthNum}`);
+            
+            // Show loading state
+            updateKPICards('—', '—', '—', '—', 'Uygun');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/kds/summary?year=${yearNum}&month=${monthNum}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Format currency for revenue
+                    const formattedCiro = formatCurrencyTL(data.toplamAylikCiro);
+                    
+                    // Format sales count with thousand separators
+                    const formattedAdet = data.satisAdedi.toLocaleString('tr-TR');
+                    
+                    // Format critical depots count
+                    const formattedKritik = data.kritikDepoSayisi.toString();
+                    
+                    // Determine badge class and text based on decision
+                    const badgeClass = data.kdsKarari === 'DIKKAT' ? 'decision-warning' : 'decision-safe';
+                    const badgeText = data.kdsKarari === 'DIKKAT' ? 'Dikkat' : 'Uygun';
+                    const statusText = badgeText; // Show the same text in status field
+                    
+                    // Update KPI cards
+                    updateKPICards(formattedCiro, formattedAdet, formattedKritik, statusText, badgeText, badgeClass);
+                } else {
+                    throw new Error(data.error || 'Veri yüklenemedi');
+                }
+            } catch (error) {
+                console.error('❌ Error loading KDS summary:', error);
+                // Show error state (keep "—" values)
+                updateKPICards('—', '—', '—', '—', 'Uygun');
+            }
         });
     }
 
@@ -2845,14 +2897,12 @@ function initEventListeners() {
  * Load and render best depots from API
  */
 async function loadBestDepots() {
-    const loadingEl = document.getElementById('best-depots-loading');
     const contentEl = document.getElementById('best-depots-content');
     const emptyEl = document.getElementById('best-depots-empty');
     
     let hasData = false;
     
-    // Show loading state initially
-    if (loadingEl) loadingEl.classList.remove('hidden');
+    // Initially hide both content and empty state
     if (contentEl) contentEl.classList.add('hidden');
     if (emptyEl) emptyEl.classList.add('hidden');
     
@@ -2877,9 +2927,6 @@ async function loadBestDepots() {
         console.error('❌ Error loading best depots:', error);
         hasData = false;
     } finally {
-        // Always hide loading after fetch completes
-        if (loadingEl) loadingEl.classList.add('hidden');
-        
         // Update UI based on final state
         if (hasData) {
             // Data exists: show content
@@ -2890,6 +2937,9 @@ async function loadBestDepots() {
             if (contentEl) contentEl.classList.add('hidden');
             if (emptyEl) emptyEl.classList.remove('hidden');
         }
+        
+        // Equalize card heights after content is updated
+        setTimeout(equalizeCardHeights, 50);
     }
 }
 
@@ -2941,28 +2991,173 @@ function renderBestDepots(depots) {
     
     html += '</div>';
     contentEl.innerHTML = html;
+    
+    // Equalize card heights after rendering
+    equalizeCardHeights();
 }
 
 /**
  * Initialize Decision Panel charts with static demo data
  * TODO: Wire to actual API endpoints when available
  */
+/**
+ * Calculate forecast values based on average month-to-month growth rate
+ * with damping and deterministic fluctuations for more realistic forecasts
+ * @param {Array<number>} historicalData - Array of historical revenue values
+ * @param {number} forecastMonths - Number of months to forecast
+ * @returns {Array<number>} Array of forecast values
+ */
+function calculateRevenueForecast(historicalData, forecastMonths = 6) {
+    if (historicalData.length < 2) {
+        // Not enough data, return flat forecast
+        const lastValue = historicalData[historicalData.length - 1] || 0;
+        return Array(forecastMonths).fill(Math.max(0, lastValue));
+    }
+    
+    // Calculate month-to-month change ratios
+    const ratios = [];
+    for (let i = 1; i < historicalData.length; i++) {
+        const prev = historicalData[i - 1];
+        const curr = historicalData[i];
+        if (prev > 0) {
+            ratios.push(curr / prev);
+        }
+    }
+    
+    // Calculate average ratio (geometric mean for multiplicative growth)
+    const avgRatio = ratios.length > 0 
+        ? Math.pow(ratios.reduce((a, b) => a * b, 1), 1 / ratios.length)
+        : 1.0;
+    
+    // Convert ratio to growth rate (e.g., 1.05 = 5% growth, 0.95 = -5% decline)
+    const avgGrowthRate = avgRatio - 1.0;
+    
+    // Deterministic fluctuation pattern (as percentages: 0.012 = +1.2%, -0.008 = -0.8%)
+    const fluctuationPattern = [0.012, -0.008, 0.006, -0.010, 0.007, -0.005];
+    
+    // Generate forecast starting from last historical value
+    const forecast = [];
+    let lastValue = historicalData[historicalData.length - 1];
+    
+    for (let i = 0; i < forecastMonths; i++) {
+        // Apply damping: reduce growth rate over time (0.85^(i-1) for month i)
+        // Month 0: no damping, Month 1: 0.85, Month 2: 0.85^2, etc.
+        const dampingFactor = i === 0 ? 1.0 : Math.pow(0.85, i - 1);
+        const effectiveRate = avgGrowthRate * dampingFactor;
+        
+        // Add deterministic fluctuation (cycle through pattern)
+        const fluctuation = fluctuationPattern[i % fluctuationPattern.length];
+        let monthlyChangeRate = effectiveRate + fluctuation;
+        
+        // Clamp monthly change to between -5% and +5%
+        monthlyChangeRate = Math.max(-0.05, Math.min(0.05, monthlyChangeRate));
+        
+        // Apply the change rate to get new value
+        lastValue = lastValue * (1.0 + monthlyChangeRate);
+        
+        // Ensure non-negative
+        forecast.push(Math.max(0, lastValue));
+    }
+    
+    return forecast;
+}
+
+/**
+ * Generate next 6 months labels starting from the month after the last historical month
+ * @param {Array<string>} historicalLabels - Array of historical month labels
+ * @returns {Array<string>} Array of next 6 month labels
+ */
+function generateForecastLabels(historicalLabels) {
+    // Find the index of the last historical month in TURKISH_MONTHS
+    const lastHistoricalMonth = historicalLabels[historicalLabels.length - 1];
+    const lastMonthIndex = TURKISH_MONTHS.indexOf(lastHistoricalMonth);
+    
+    if (lastMonthIndex === -1) {
+        // Fallback: if month not found, assume Kasım (November, index 10)
+        const labels = [];
+        let currentMonthIndex = 10; // Kasım
+        
+        for (let i = 0; i < 6; i++) {
+            currentMonthIndex = (currentMonthIndex + 1) % 12;
+            labels.push(TURKISH_MONTHS[currentMonthIndex]);
+        }
+        return labels;
+    }
+    
+    // Generate next 6 months starting from the month after the last historical month
+    const labels = [];
+    let currentMonthIndex = (lastMonthIndex + 1) % 12;
+    
+    for (let i = 0; i < 6; i++) {
+        labels.push(TURKISH_MONTHS[currentMonthIndex]);
+        currentMonthIndex = (currentMonthIndex + 1) % 12;
+    }
+    
+    return labels;
+}
+
+/**
+ * Toggle revenue trend chart between real and forecast view
+ */
+function toggleRevenueTrendView() {
+    if (!revenueTrendChartInstance) {
+        return;
+    }
+    
+    if (revenueTrendViewMode === 'real') {
+        // Switch to forecast view
+        const forecastData = calculateRevenueForecast(REVENUE_TREND_ORIGINAL_DATA, 6);
+        const forecastLabels = generateForecastLabels(REVENUE_TREND_ORIGINAL_LABELS);
+        
+        // Update chart
+        revenueTrendChartInstance.data.labels = forecastLabels;
+        revenueTrendChartInstance.data.datasets[0].data = forecastData;
+        revenueTrendChartInstance.data.datasets[0].borderDash = [6, 6];
+        revenueTrendChartInstance.data.datasets[0].fill = false;
+        revenueTrendChartInstance.data.datasets[0].label = 'Önümüzdeki 6 Ay Tahmini Ciro (₺)';
+        
+        revenueTrendChartInstance.update();
+        
+        // Update button text
+        const toggleBtn = document.getElementById('revenue-trend-toggle-btn');
+        if (toggleBtn) {
+            toggleBtn.textContent = 'Son 6 Ay Ciro Trendi';
+        }
+        
+        revenueTrendViewMode = 'forecast';
+    } else {
+        // Switch back to real view
+        revenueTrendChartInstance.data.labels = REVENUE_TREND_ORIGINAL_LABELS;
+        revenueTrendChartInstance.data.datasets[0].data = REVENUE_TREND_ORIGINAL_DATA;
+        revenueTrendChartInstance.data.datasets[0].borderDash = [];
+        revenueTrendChartInstance.data.datasets[0].fill = true;
+        revenueTrendChartInstance.data.datasets[0].label = 'Aylık Ciro (₺)';
+        
+        revenueTrendChartInstance.update();
+        
+        // Update button text
+        const toggleBtn = document.getElementById('revenue-trend-toggle-btn');
+        if (toggleBtn) {
+            toggleBtn.textContent = 'Önümüzdeki 6 Ay Tahmini Ciro Trendi';
+        }
+        
+        revenueTrendViewMode = 'real';
+    }
+}
+
 function initDecisionPanelCharts() {
     // Revenue Trend Chart (Line)
     const revenueTrendCanvas = document.getElementById('revenue-trend-chart');
     if (revenueTrendCanvas && typeof Chart !== 'undefined') {
         const ctx = revenueTrendCanvas.getContext('2d');
-        // Static demo data: Last 6 months revenue trend
-        const revenueLabels = ['Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım'];
-        const revenueData = [150000, 180000, 165000, 210000, 195000, 192830];
         
         revenueTrendChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: revenueLabels,
+                labels: REVENUE_TREND_ORIGINAL_LABELS,
                 datasets: [{
                     label: 'Aylık Ciro (₺)',
-                    data: revenueData,
+                    data: REVENUE_TREND_ORIGINAL_DATA,
                     borderColor: '#13A865',
                     backgroundColor: 'rgba(19, 168, 101, 0.1)',
                     borderWidth: 3,
@@ -3007,10 +3202,20 @@ function initDecisionPanelCharts() {
                 }
             }
         });
+        
+        // Add toggle button event listener
+        const toggleBtn = document.getElementById('revenue-trend-toggle-btn');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', toggleRevenueTrendView);
+        }
     }
     
     // Load best depots (replaces warehouse comparison chart)
     loadBestDepots();
+    
+    // Equalize card heights after charts are initialized
+    // Use setTimeout to ensure DOM is fully updated
+    setTimeout(equalizeCardHeights, 100);
     
     // Top Products by Space Chart (Horizontal Bar)
     const topProductsSpaceCanvas = document.getElementById('top-products-space-chart');
@@ -3152,6 +3357,125 @@ function init() {
 
 // Run initialization when DOM is ready
 document.addEventListener('DOMContentLoaded', init);
+
+// ======================
+// Card Height Equalization
+// ======================
+
+/**
+ * Equalize heights of revenue trend card and best depots card
+ * Makes the left chart card match the right card's height
+ */
+function equalizeCardHeights() {
+    const revenueCard = document.getElementById('revenueTrendCard');
+    const depotsCard = document.getElementById('bestDepotsCard');
+    const chartWrap = document.getElementById('revenueTrendChartWrap');
+    
+    if (!revenueCard || !depotsCard || !chartWrap) {
+        return; // Elements not found, exit early
+    }
+    
+    // Get the height of the right card (best depots)
+    const depotsCardHeight = depotsCard.getBoundingClientRect().height;
+    
+    if (depotsCardHeight <= 0) {
+        return; // Card not visible yet, skip
+    }
+    
+    // Set the left card to match the right card's height
+    revenueCard.style.height = depotsCardHeight + 'px';
+    
+    // Calculate available height for chart container
+    // Get header height
+    const cardHeader = revenueCard.querySelector('.card-header');
+    const cardBody = revenueCard.querySelector('.card-body');
+    
+    if (!cardHeader || !cardBody) {
+        return;
+    }
+    
+    const headerHeight = cardHeader.getBoundingClientRect().height;
+    const bodyPadding = parseFloat(getComputedStyle(cardBody).paddingTop) + 
+                        parseFloat(getComputedStyle(cardBody).paddingBottom);
+    
+    // Calculate chart container height: total card height - header - body padding
+    const chartHeight = depotsCardHeight - headerHeight - bodyPadding;
+    
+    // Ensure minimum height to prevent issues
+    if (chartHeight > 50) {
+        chartWrap.style.height = chartHeight + 'px';
+        
+        // Resize Chart.js instance if it exists
+        if (revenueTrendChartInstance && typeof revenueTrendChartInstance.resize === 'function') {
+            revenueTrendChartInstance.resize();
+        }
+    }
+}
+
+/**
+ * Debounced resize handler for window resize events
+ */
+let resizeTimeout = null;
+function handleResize() {
+    if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+    }
+    resizeTimeout = setTimeout(() => {
+        equalizeCardHeights();
+    }, 100);
+}
+
+// Add resize listener
+window.addEventListener('resize', handleResize);
+
+// ======================
+// KPI Cards Update Function
+// ======================
+
+/**
+ * Update KPI cards with summary data
+ * @param {string} revenue - Formatted revenue string
+ * @param {string} salesCount - Formatted sales count string
+ * @param {string} criticalDepots - Critical depots count string
+ * @param {string} decisionStatus - Decision status ("UYGUN" or "DIKKAT")
+ * @param {string} badgeText - Badge text ("Uygun" or "Dikkat")
+ * @param {string} badgeClass - Badge CSS class ("decision-safe" or "decision-warning")
+ */
+function updateKPICards(revenue, salesCount, criticalDepots, decisionStatus, badgeText, badgeClass = 'decision-safe') {
+    // Update revenue card
+    const revenueEl = document.getElementById('kpi-monthly-revenue');
+    if (revenueEl) {
+        revenueEl.textContent = revenue;
+    }
+    
+    // Update sales count card
+    const salesCountEl = document.getElementById('kpi-sales-count');
+    if (salesCountEl) {
+        salesCountEl.textContent = salesCount;
+    }
+    
+    // Update critical warehouses card
+    const criticalEl = document.getElementById('kpi-critical-warehouses');
+    if (criticalEl) {
+        criticalEl.textContent = criticalDepots;
+    }
+    
+    // Update decision status and badge
+    const decisionStatusEl = document.getElementById('kpi-decision-status');
+    const decisionBadgeEl = document.getElementById('kpi-decision-badge');
+    
+    if (decisionStatusEl) {
+        decisionStatusEl.textContent = decisionStatus;
+    }
+    
+    if (decisionBadgeEl) {
+        decisionBadgeEl.textContent = badgeText;
+        // Remove existing badge classes
+        decisionBadgeEl.classList.remove('decision-safe', 'decision-warning', 'decision-danger');
+        // Add new badge class
+        decisionBadgeEl.classList.add(badgeClass);
+    }
+}
 
 // ======================
 // Export for testing (if needed)
