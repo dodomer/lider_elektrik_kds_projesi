@@ -123,14 +123,17 @@ router.get('/kds/summary', async (req, res) => {
         const salesCountResult = await db.query(salesCountSql, [year, month]);
         const satisAdedi = parseInt(salesCountResult[0]?.satis_adedi || 0);
         
-        // C) Count critical depots (occupancy >= 80%)
+        // C) Count critical depots (occupancy >= 85%)
+        // Only count purchased/active depots: sahip_miyiz = 1 AND aktif_mi = 1
+        // OccupancyRate = (usedCapacityDb / totalCapacityDb) * 100
+        // Critical threshold = 85%
         const criticalDepotsSql = `
             SELECT COUNT(*) AS kritik_depo_sayisi
             FROM (
                 SELECT 
                     l.lokasyon_id,
-                    l.kullanilabilir_kapasite_db,
-                    COALESCE(SUM(s.miktar * u.hacim_db), 0) AS used_db,
+                    l.kullanilabilir_kapasite_db AS total_capacity_db,
+                    COALESCE(SUM(s.miktar * u.hacim_db), 0) AS used_capacity_db,
                     CASE 
                         WHEN l.kullanilabilir_kapasite_db = 0 THEN 0
                         ELSE (COALESCE(SUM(s.miktar * u.hacim_db), 0) / l.kullanilabilir_kapasite_db) * 100
@@ -138,9 +141,12 @@ router.get('/kds/summary', async (req, res) => {
                 FROM lokasyonlar l
                 LEFT JOIN stoklar s ON s.lokasyon_id = l.lokasyon_id
                 LEFT JOIN urunler u ON u.urun_id = s.urun_id AND u.aktif_mi = 1
-                WHERE l.tur = 'depo' AND (l.aktif_mi = 1 OR l.aktif_mi IS NULL)
+                WHERE l.tur = 'depo' 
+                    AND l.sahip_miyiz = 1  -- Only purchased depots
+                    AND l.aktif_mi = 1     -- Only active depots
+                    AND l.kullanilabilir_kapasite_db > 0  -- Must have capacity > 0
                 GROUP BY l.lokasyon_id, l.kullanilabilir_kapasite_db
-                HAVING doluluk_orani >= 80
+                HAVING doluluk_orani >= 85  -- Critical threshold: 85%
             ) AS critical_depots
         `;
         
@@ -495,6 +501,51 @@ router.get('/depolar-detay', async (req, res) => {
 });
 
 /**
+ * Helper function to parse Turkish number formats
+ * Handles: "14.750", "1.500,00", "14,75", etc.
+ * @param {any} v - Value to parse
+ * @returns {number} Parsed number or 0 if invalid
+ */
+function parseTrNumber(v) {
+    if (v === null || v === undefined) return 0;
+    if (typeof v === 'number') {
+        return Number.isFinite(v) ? v : 0;
+    }
+    if (typeof v === 'object' || Array.isArray(v)) {
+        return 0; // Objects/arrays are not valid numbers
+    }
+    const s = String(v).trim();
+    if (!s) return 0;
+    // Remove thousand separators (dots) and convert decimal comma to dot
+    const normalized = s.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Helper function to parse coordinate values (latitude/longitude)
+ * Handles: "27.1676", "27,1676", etc.
+ * DO NOT remove dots (they are decimal separators, not thousands separators)
+ * @param {any} v - Value to parse
+ * @returns {number|null} Parsed number or null if invalid
+ */
+function parseCoord(v) {
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'number') {
+        return Number.isFinite(v) ? v : null;
+    }
+    if (typeof v === 'object' || Array.isArray(v)) {
+        return null; // Objects/arrays are not valid coordinates
+    }
+    const s = String(v).trim();
+    if (!s) return null;
+    // Only replace comma with dot, do NOT remove dots (they are decimal separators)
+    const normalized = s.replace(/\s/g, '').replace(',', '.');
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
  * POST /api/depolar
  * Create a new warehouse (depo) with optional photos
  * Accepts multipart/form-data with fields and photos[]
@@ -506,48 +557,68 @@ router.post('/depolar', upload.array('photos', 10), async (req, res) => {
         // Validate required fields
         const { ad, enlem, boylam } = req.body;
         
-        if (!ad || ad.trim() === '') {
+        // Validate name/title - must be non-empty string
+        if (!ad || typeof ad !== 'string' || ad.trim() === '') {
             return res.status(400).json({
                 success: false,
-                error: 'Depo adı zorunludur.'
+                error: 'Depo adı zorunludur ve geçerli bir metin olmalıdır.'
             });
         }
         
-        if (!enlem || isNaN(parseFloat(enlem))) {
+        // Parse and validate coordinates using dedicated coordinate parser
+        const parsedEnlem = parseCoord(enlem);
+        const parsedBoylam = parseCoord(boylam);
+        
+        // Validate latitude range: -90 to 90
+        if (parsedEnlem === null || !Number.isFinite(parsedEnlem) || parsedEnlem < -90 || parsedEnlem > 90) {
             return res.status(400).json({
                 success: false,
-                error: 'Geçerli bir enlem (latitude) değeri gerekli.'
+                error: 'Koordinatlar geçersiz. Enlem (latitude) -90 ile 90 arasında olmalıdır.'
             });
         }
         
-        if (!boylam || isNaN(parseFloat(boylam))) {
+        // Validate longitude range: -180 to 180
+        if (parsedBoylam === null || !Number.isFinite(parsedBoylam) || parsedBoylam < -180 || parsedBoylam > 180) {
             return res.status(400).json({
                 success: false,
-                error: 'Geçerli bir boylam (longitude) değeri gerekli.'
+                error: 'Koordinatlar geçersiz. Boylam (longitude) -180 ile 180 arasında olmalıdır.'
             });
         }
         
-        // Prepare data for insertion
-        // NOTE: kullanilabilir_kapasite_db is a GENERATED column in MySQL
-        // DO NOT include it in INSERT - MySQL will calculate it automatically
+        // Sanitize and parse all numeric fields
+        const sanitizedAdres = req.body.adres && typeof req.body.adres === 'string' 
+            ? req.body.adres.trim() || null 
+            : null;
         
+        const sanitizedMetrekare = req.body.metrekare ? parseTrNumber(req.body.metrekare) : null;
+        const sanitizedYukseklik = req.body.yukseklik_m ? parseTrNumber(req.body.yukseklik_m) : null;
+        const sanitizedKapasite = req.body.kapasite_db ? Math.floor(parseTrNumber(req.body.kapasite_db)) : null;
+        const sanitizedKullanilabilirOran = req.body.kullanilabilir_oran ? parseTrNumber(req.body.kullanilabilir_oran) : null;
+        const sanitizedAylikKira = req.body.aylik_kira ? parseTrNumber(req.body.aylik_kira) : null;
+        
+        // Ensure no NaN values - convert to null if invalid
         const depoData = {
             tur: 'depo',
             ad: ad.trim(),
-            adres: req.body.adres || null,
-            enlem: parseFloat(enlem),
-            boylam: parseFloat(boylam),
-            metrekare: req.body.metrekare ? parseFloat(req.body.metrekare) : null,
-            yukseklik_m: req.body.yukseklik_m ? parseFloat(req.body.yukseklik_m) : null,
-            kapasite_db: req.body.kapasite_db ? parseInt(req.body.kapasite_db) : null,
-            kullanilabilir_oran: req.body.kullanilabilir_oran ? parseFloat(req.body.kullanilabilir_oran) : null,
-            // kullanilabilir_kapasite_db is GENERATED - do not include in INSERT
-            aylik_kira: req.body.aylik_kira ? parseFloat(req.body.aylik_kira) : null,
+            adres: sanitizedAdres,
+            enlem: parsedEnlem,
+            boylam: parsedBoylam,
+            metrekare: Number.isFinite(sanitizedMetrekare) && sanitizedMetrekare > 0 ? sanitizedMetrekare : null,
+            yukseklik_m: Number.isFinite(sanitizedYukseklik) && sanitizedYukseklik > 0 ? sanitizedYukseklik : null,
+            kapasite_db: Number.isFinite(sanitizedKapasite) && sanitizedKapasite > 0 ? sanitizedKapasite : null,
+            kullanilabilir_oran: Number.isFinite(sanitizedKullanilabilirOran) && sanitizedKullanilabilirOran >= 0 && sanitizedKullanilabilirOran <= 100 ? sanitizedKullanilabilirOran : null,
+            aylik_kira: Number.isFinite(sanitizedAylikKira) && sanitizedAylikKira >= 0 ? sanitizedAylikKira : null,
             sahip_miyiz: 0 // Default: not owned
         };
         
         // Insert warehouse into database (excluding generated column)
         // Note: aktif_mi defaults to 1 if column exists
+        // IMPORTANT: enlem and boylam columns should be DECIMAL(10,6) or DECIMAL(11,8)
+        // to store coordinates with sufficient precision (e.g., 27.16764753539589)
+        // If columns are INTEGER or too small, run:
+        //   ALTER TABLE lokasyonlar
+        //     MODIFY enlem DECIMAL(10,6) NULL,
+        //     MODIFY boylam DECIMAL(10,6) NULL;
         const insertSql = `
             INSERT INTO lokasyonlar (
                 tur, ad, adres, enlem, boylam, metrekare, yukseklik_m,
@@ -567,9 +638,44 @@ router.post('/depolar', upload.array('photos', 10), async (req, res) => {
             depoData.kapasite_db,
             depoData.kullanilabilir_oran,
             depoData.aylik_kira,
-            depoData.sahip_miyiz,
-            1 // aktif_mi = 1 (active by default)
+            depoData.sahip_miyiz
         ];
+        
+        // Debug: Log placeholder count vs params length
+        const placeholderCount = (insertSql.match(/\?/g) || []).length;
+        console.log('[DEPOT CREATE] placeholders:', placeholderCount, 'params:', insertParams.length);
+        console.log('[DEPOT CREATE] param types:', insertParams.map(v => ({
+            type: typeof v,
+            isArray: Array.isArray(v),
+            isNull: v === null,
+            isUndefined: v === undefined,
+            isNaN: typeof v === 'number' && Number.isNaN(v),
+            value: v
+        })));
+        
+        // Validate params before query
+        for (let i = 0; i < insertParams.length; i++) {
+            const param = insertParams[i];
+            if (param === undefined) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Param ${i} is undefined. Please check all required fields.`
+                });
+            }
+            if (typeof param === 'number' && Number.isNaN(param)) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Param ${i} is NaN. Invalid number format.`
+                });
+            }
+            if (typeof param === 'object' && !Array.isArray(param) && param !== null) {
+                // Convert objects to JSON string if needed, but for depot creation we shouldn't have objects
+                return res.status(400).json({
+                    success: false,
+                    error: `Param ${i} is an object. Invalid data type.`
+                });
+            }
+        }
         
         const insertResult = await db.query(insertSql, insertParams);
         // For INSERT queries, mysql2 returns an object with insertId property
@@ -649,6 +755,7 @@ router.post('/depolar', upload.array('photos', 10), async (req, res) => {
         
     } catch (error) {
         console.error('❌ Error creating depot:', error.message);
+        console.error('❌ Full error:', error);
         
         // Clean up uploaded files if depot creation failed
         if (req.files && req.files.length > 0) {
@@ -662,8 +769,8 @@ router.post('/depolar', upload.array('photos', 10), async (req, res) => {
         
         return res.status(500).json({
             success: false,
-            error: 'Depo oluşturulurken bir hata oluştu.',
-            message: error.message
+            message: 'Depo oluşturulurken hata oluştu.',
+            error: error.message
         });
     }
 });
@@ -1480,10 +1587,19 @@ router.get('/en-uygun-depolar', async (req, res) => {
         const minDistance = Math.min(...distances, 0);
         
         // Calculate scores for each depot
-        // Weights: capacity 0.45, price 0.35, distance 0.20
-        const WEIGHT_CAPACITY = 0.45;
-        const WEIGHT_PRICE = 0.35;
-        const WEIGHT_DISTANCE = 0.20;
+        // Weights: distance 0.50, price 0.30, capacity 0.20 (defaults)
+        // Can be overridden via query parameters
+        let WEIGHT_DISTANCE = parseFloat(req.query.weightDistance) || 0.50;
+        let WEIGHT_PRICE = parseFloat(req.query.weightPrice) || 0.30;
+        let WEIGHT_CAPACITY = parseFloat(req.query.weightCapacity) || 0.20;
+        
+        // Normalize weights to sum to 1.0
+        const totalWeight = WEIGHT_DISTANCE + WEIGHT_PRICE + WEIGHT_CAPACITY;
+        if (totalWeight > 0) {
+            WEIGHT_DISTANCE = WEIGHT_DISTANCE / totalWeight;
+            WEIGHT_PRICE = WEIGHT_PRICE / totalWeight;
+            WEIGHT_CAPACITY = WEIGHT_CAPACITY / totalWeight;
+        }
         
         const depotsWithScores = depotsWithMetrics.map(depot => {
             // Normalize capacity (higher is better): (value - min) / (max - min)
@@ -1506,9 +1622,9 @@ router.get('/en-uygun-depolar', async (req, res) => {
             
             // Calculate weighted score
             const score = (
-                normalizedCapacity * WEIGHT_CAPACITY +
+                normalizedDistance * WEIGHT_DISTANCE +
                 normalizedPrice * WEIGHT_PRICE +
-                normalizedDistance * WEIGHT_DISTANCE
+                normalizedCapacity * WEIGHT_CAPACITY
             ) * 100; // Scale to 0-100 for readability
             
             return {
@@ -2378,27 +2494,5 @@ router.get('/ping', (req, res) => {
 });
 
 // Depoları harita için dönen endpoint
-router.get('/depots', async (req, res) => {
-    try {
-        const query = `
-          SELECT 
-            lokasyon_id AS id,
-            ad          AS name,
-            enlem       AS latitude,
-            boylam      AS longitude,
-            tur,
-            adres
-          FROM lokasyonlar
-          WHERE tur = 'depo' AND (aktif_mi = 1 OR aktif_mi IS NULL);
-        `;
-
-        const result = await db.query(query); // If your DB module uses pool, use pool.query
-        res.json(result.rows || result);
-    } catch (err) {
-        console.error('Depo verileri alınırken hata:', err);
-        res.status(500).json({ error: 'Depo verileri alınırken bir hata oluştu.' });
-    }
-});
-
 module.exports = router;
 

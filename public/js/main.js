@@ -221,6 +221,29 @@ function showAnalysisSection() {
         // Load utilization for the analysis section
         loadStoreUtilization('analysis');
         
+        // Load depots table
+        if (typeof loadDepotsTable === 'function') {
+            loadDepotsTable();
+        }
+        
+        // Initialize map if not initialized, then refresh and load markers
+        setTimeout(() => {
+            // Initialize map if it exists and is not initialized
+            if (typeof initDepoMap === 'function') {
+                initDepoMap();
+            }
+            
+            // Refresh map size after DOM layout is ready
+            if (typeof depoMap !== 'undefined' && depoMap && typeof depoMap.invalidateSize === 'function') {
+                depoMap.invalidateSize();
+            }
+            
+            // Load markers for the map
+            if (typeof loadDepotsForMap === 'function') {
+                loadDepotsForMap();
+            }
+        }, 50);
+        
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 }
@@ -1741,10 +1764,19 @@ function populateLocationDropdown(locations) {
         const option = document.createElement('option');
         option.value = location.lokasyon_id;
         option.textContent = `${location.ad} (${location.tur === 'magaza' ? 'Mağaza' : 'Depo'})`;
-        // Use kapasite_db (preferred) or fallback to kullanilabilir_kapasite_db
-        option.dataset.capacity = location.kapasite_db || location.kullanilabilir_kapasite_db || 0;
-        option.dataset.usedDb = location.used_db || 0;
-        option.dataset.dolulukYuzde = location.doluluk_yuzde || 0;
+        
+        // Compute numeric capacity and used first
+        const capacityDb = Number(location.kapasite_db || location.kullanilabilir_kapasite_db || 0);
+        const usedDb = Number(location.used_db || 0);
+        
+        // Compute occupancy percent ON 0-100 scale
+        const dolulukYuzde = capacityDb > 0 ? (usedDb / capacityDb) * 100 : 0;
+        
+        // Assign datasets using computed values
+        option.dataset.capacity = capacityDb;
+        option.dataset.usedDb = usedDb;
+        option.dataset.dolulukYuzde = dolulukYuzde;
+        
         elements.productLokasyonSelect.appendChild(option);
     });
 }
@@ -2070,6 +2102,15 @@ async function handleAddProductSubmit(event) {
             if (data.data.location_occupancy) {
                 cachedUtilizationData = null; // Clear cache to force refresh
                 loadStoreUtilization();
+            }
+            
+            // Refresh "Mevcut Depolarım" modal if it's open and product was added to a depot
+            if (lokasyonId && typeof loadOwnedDepots === 'function') {
+                const ownedModal = document.getElementById('mevcut-depolarim-modal');
+                if (ownedModal && !ownedModal.classList.contains('hidden')) {
+                    // Modal is open, refresh the owned depots list to update occupancy/status
+                    loadOwnedDepots();
+                }
             }
             
             // Close modal after a short delay
@@ -2919,6 +2960,94 @@ function initEventListeners() {
 }
 
 // ======================
+// Suitability Weights Management
+// ======================
+
+const DEFAULT_WEIGHTS = {
+    distance: 50,
+    rent: 30,
+    capacity: 20
+};
+
+const STORAGE_KEY = 'kds_suitability_weights';
+
+/**
+ * Get suitability weights from localStorage or return defaults
+ * @returns {Object} {distance, rent, capacity} as percentages (50, 30, 20)
+ */
+function getSuitabilityWeights() {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            // Validate structure and values
+            if (parsed && 
+                typeof parsed.distance === 'number' && 
+                typeof parsed.rent === 'number' && 
+                typeof parsed.capacity === 'number' &&
+                parsed.distance >= 0 && parsed.distance <= 100 &&
+                parsed.rent >= 0 && parsed.rent <= 100 &&
+                parsed.capacity >= 0 && parsed.capacity <= 100) {
+                return parsed;
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to parse suitability weights from localStorage:', error);
+    }
+    return { ...DEFAULT_WEIGHTS };
+}
+
+/**
+ * Set suitability weights and save to localStorage
+ * @param {Object} weights - {distance, rent, capacity} as percentages
+ * @returns {Object} Normalized weights that sum to 100
+ */
+function setSuitabilityWeights(weights) {
+    // Clamp values between 0 and 100
+    let distance = Math.max(0, Math.min(100, weights.distance || 0));
+    let rent = Math.max(0, Math.min(100, weights.rent || 0));
+    let capacity = Math.max(0, Math.min(100, weights.capacity || 0));
+    
+    // Normalize to sum to 100
+    const total = distance + rent + capacity;
+    if (total > 0) {
+        distance = Math.round((distance / total) * 100);
+        rent = Math.round((rent / total) * 100);
+        capacity = 100 - distance - rent; // Ensure exact sum
+    } else {
+        // If all zero, use defaults
+        distance = DEFAULT_WEIGHTS.distance;
+        rent = DEFAULT_WEIGHTS.rent;
+        capacity = DEFAULT_WEIGHTS.capacity;
+    }
+    
+    const normalized = { distance, rent, capacity };
+    
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    } catch (error) {
+        console.error('Failed to save suitability weights to localStorage:', error);
+    }
+    
+    return normalized;
+}
+
+/**
+ * Update the tooltip text to reflect current weights
+ */
+function updateSuitabilityTooltip() {
+    const tooltipEl = document.querySelector('#best-depots-help-icon .tooltip');
+    if (!tooltipEl) return;
+    
+    const weights = getSuitabilityWeights();
+    const distanceDec = (weights.distance / 100).toFixed(2);
+    const rentDec = (weights.rent / 100).toFixed(2);
+    const capacityDec = (weights.capacity / 100).toFixed(2);
+    
+    tooltipEl.innerHTML = `Uygunluk skoru; Mesafe, Aylık Kira ve Kapasite kriterlerinin 0–100 aralığına normalize edilip ağırlıklandırılmasıyla hesaplanır.<br><br>Ağırlıklar: Mesafe %${weights.distance}, Aylık Kira %${weights.rent}, Kapasite %${weights.capacity}.<br><br>Formül: Skor = (MesafeSkoru×${distanceDec}) + (KiraSkoru×${rentDec}) + (KapasiteSkoru×${capacityDec}).<br><br>Not: Yakın ve ucuz depolar daha yüksek puan alır; kapasite arttıkça puan artar.`;
+}
+
+// ======================
 // Decision Panel Functions
 // ======================
 
@@ -2936,7 +3065,17 @@ async function loadBestDepots() {
     if (emptyEl) emptyEl.classList.add('hidden');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/en-uygun-depolar`);
+        // Get current weights from localStorage
+        const weights = getSuitabilityWeights();
+        
+        // Build query string with weights
+        const params = new URLSearchParams({
+            weightDistance: (weights.distance / 100).toString(),
+            weightPrice: (weights.rent / 100).toString(),
+            weightCapacity: (weights.capacity / 100).toString()
+        });
+        
+        const response = await fetch(`${API_BASE_URL}/en-uygun-depolar?${params.toString()}`);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -2965,6 +3104,16 @@ async function loadBestDepots() {
             // No data: show empty state
             if (contentEl) contentEl.classList.add('hidden');
             if (emptyEl) emptyEl.classList.remove('hidden');
+        }
+        
+        // Refresh cost chart when depot data changes
+        if (typeof initDepotCostChart === 'function') {
+            initDepotCostChart();
+        }
+        
+        // Refresh capacity scenario chart when depot data changes
+        if (typeof initCapacityScenarioChart === 'function') {
+            initCapacityScenarioChart();
         }
         
         // Equalize card heights after content is updated
@@ -3360,6 +3509,633 @@ function initDecisionPanelCharts() {
             }
         });
     }
+    
+    // Initialize new cost and capacity charts
+    initDepotCostChart();
+    initCapacityScenarioChart();
+}
+
+// ======================
+// Depot Cost & Capacity Charts
+// ======================
+
+// Chart instances for new charts
+let depotCostChartInstance = null;
+let capacityScenarioChartInstance = null;
+
+// Constants for transportation cost calculation
+// Formula: Fixed truck cost + (Distance × Fuel consumption × Fuel price)
+// Assumptions:
+// - Fixed truck cost per trip: 15,000 ₺ (covers driver, vehicle maintenance, etc.)
+// - Average fuel consumption: 35 liters per 100 km
+// - Fuel price: 53.08 ₺ per liter
+// - Cost per km: (35 / 100) * 53.08 = 18.578 ₺
+const TRANSPORT_FIXED_COST = 15000; // Fixed truck cost in Turkish Lira (₺)
+const TRANSPORT_COST_PER_KM = (35 / 100) * 53.08; // Cost per kilometer: 18.578 ₺
+
+/**
+ * Prepare sorted and sliced depot cost data for chart
+ * @param {Array} depots - Array of depot objects from API
+ * @param {boolean} expanded - Whether to show all depots or just top 5
+ * @returns {Object} { labels, rentData, transportData, totalData }
+ */
+function prepareDepotCostData(depots, expanded = false) {
+    // Map depots to objects with calculated costs
+    const depotCosts = depots.map(d => {
+        const rent = d.aylik_kira || 0;
+        const distance = d.distance_km || 0;
+        const transport = TRANSPORT_FIXED_COST + (distance * TRANSPORT_COST_PER_KM);
+        const total = rent + transport;
+        
+        return {
+            name: d.depo_adi || 'Depo',
+            rent: rent,
+            transport: transport,
+            total: total
+        };
+    });
+    
+    // Sort by total cost ascending
+    depotCosts.sort((a, b) => a.total - b.total);
+    
+    // Slice to top 5 if not expanded
+    const displayCount = expanded ? depotCosts.length : Math.min(5, depotCosts.length);
+    const displayDepots = depotCosts.slice(0, displayCount);
+    
+    // Build arrays for chart
+    const labels = displayDepots.map(d => {
+        // Return only depot name (no total cost in label)
+        return d.name;
+    });
+    const rentData = displayDepots.map(d => d.rent);
+    const transportData = displayDepots.map(d => d.transport);
+    const totalData = displayDepots.map(d => d.total);
+    
+    return {
+        labels: labels,
+        rentData: rentData,
+        transportData: transportData,
+        totalData: totalData,
+        totalDepotCount: depotCosts.length
+    };
+}
+
+/**
+ * Initialize Depot Cost Chart (Grouped Bar Chart)
+ * Shows monthly rent and transportation cost side-by-side for each depot
+ */
+async function initDepotCostChart() {
+    const canvas = document.getElementById('depot-cost-chart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    
+    // Initialize toggle state if not exists
+    if (typeof window.__depotCostChartExpanded === 'undefined') {
+        window.__depotCostChartExpanded = false;
+    }
+    
+    try {
+        // Fetch depot data from API
+        const weights = getSuitabilityWeights();
+        const params = new URLSearchParams({
+            weightDistance: (weights.distance / 100).toString(),
+            weightPrice: (weights.rent / 100).toString(),
+            weightCapacity: (weights.capacity / 100).toString()
+        });
+        
+        const response = await fetch(`${API_BASE_URL}/en-uygun-depolar?${params.toString()}`);
+        if (!response.ok) {
+            throw new Error('Depo verileri alınamadı');
+        }
+        
+        const data = await response.json();
+        const depots = data.success && data.data ? data.data : [];
+        
+        // Prepare sorted and sliced chart data
+        const chartData = prepareDepotCostData(depots, window.__depotCostChartExpanded);
+        
+        // Update toggle button visibility and setup event listener
+        const toggleBtn = document.getElementById('depot-cost-toggle-btn');
+        if (toggleBtn) {
+            if (chartData.totalDepotCount <= 5) {
+                toggleBtn.style.display = 'none';
+            } else {
+                toggleBtn.style.display = 'inline-block';
+                toggleBtn.textContent = window.__depotCostChartExpanded ? 'Daha Az Göster' : 'Tüm Depoları Göster';
+                
+                // Setup toggle button click handler (only once)
+                if (!toggleBtn.hasAttribute('data-listener-attached')) {
+                    toggleBtn.setAttribute('data-listener-attached', 'true');
+                    toggleBtn.addEventListener('click', function() {
+                        // Toggle expanded state
+                        window.__depotCostChartExpanded = !window.__depotCostChartExpanded;
+                        // Re-render chart with new state
+                        initDepotCostChart();
+                    });
+                }
+            }
+        }
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Update existing chart or create new one
+        if (depotCostChartInstance) {
+            // Update existing chart data
+            depotCostChartInstance.data.labels = chartData.labels;
+            depotCostChartInstance.data.datasets[0].data = chartData.rentData;
+            depotCostChartInstance.data.datasets[1].data = chartData.transportData;
+            depotCostChartInstance.update();
+            return;
+        }
+        
+        // Create new chart instance (first time only)
+        
+        depotCostChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: chartData.labels,
+                datasets: [
+                    {
+                        label: 'Aylık Kira',
+                        data: chartData.rentData,
+                        backgroundColor: '#0F2038',
+                        borderColor: '#1a3a5c',
+                        borderWidth: 2,
+                        hidden: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Tahmini Ulaştırma Maliyeti',
+                        data: chartData.transportData,
+                        backgroundColor: '#f59e0b',
+                        borderColor: '#d97706',
+                        borderWidth: 2,
+                        hidden: false,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        onClick: null, // Disable legend click toggling
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                                size: 12,
+                                family: 'Outfit, sans-serif'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(10, 37, 64, 0.95)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        callbacks: {
+                            title: function(context) {
+                                // Show only depot name (remove any "Toplam:" suffix if present)
+                                const title = context[0].label || '';
+                                // If label contains newline, take only first part (depot name)
+                                const depotName = title.split('\n')[0];
+                                return depotName;
+                            },
+                            afterTitle: function(context) {
+                                // Calculate and show overall total as first line after title
+                                const dataIndex = context[0].dataIndex;
+                                const rentDataset = context[0].chart.data.datasets[0]; // Aylık Kira
+                                const transportDataset = context[0].chart.data.datasets[1]; // Tahmini Ulaştırma Maliyeti
+                                
+                                const rent = rentDataset.data[dataIndex] || 0;
+                                const transport = transportDataset.data[dataIndex] || 0;
+                                const total = rent + transport;
+                                
+                                return `Toplam: ${formatCurrencyTL(total)}`;
+                            },
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                // Skip if label contains "Toplam" (safety check for any helper datasets)
+                                if (label.toLowerCase().includes('toplam')) {
+                                    return null;
+                                }
+                                // Skip if dataset is marked as helper
+                                if (context.dataset._isTotalHelper) {
+                                    return null;
+                                }
+                                const value = context.parsed.y;
+                                return `${label}: ${formatCurrencyTL(value)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: false, // Explicitly set to false for grouped bars
+                        ticks: {
+                            font: {
+                                size: 10
+                            },
+                            maxRotation: 45,
+                            minRotation: 0
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        position: 'left',
+                        stacked: false, // Explicitly set to false for grouped bars
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                if (value >= 1000) {
+                                    return (value / 1000).toFixed(1) + 'K ₺';
+                                }
+                                return value + ' ₺';
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Aylık Kira (₺)',
+                            font: {
+                                size: 12,
+                                weight: '500'
+                            }
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        position: 'right',
+                        stacked: false, // Explicitly set to false for grouped bars
+                        beginAtZero: true,
+                        grid: {
+                            drawOnChartArea: false // Prevent grid line overlap
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                if (value >= 1000) {
+                                    return (value / 1000).toFixed(1) + 'K ₺';
+                                }
+                                return value + ' ₺';
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Tahmini Ulaştırma Maliyeti (₺)',
+                            font: {
+                                size: 12,
+                                weight: '500'
+                            }
+                        }
+                    }
+                },
+                barPercentage: 0.9, // Make bars wider for better visibility
+                categoryPercentage: 0.6 // Control spacing between categories
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error initializing depot cost chart:', error);
+        // Show placeholder data on error
+        const ctx = canvas.getContext('2d');
+        if (depotCostChartInstance) {
+            depotCostChartInstance.destroy();
+        }
+        depotCostChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Veri yükleniyor...'],
+                datasets: [{
+                    label: 'Aylık Kira',
+                    data: [0],
+                    backgroundColor: '#0F2038'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+}
+
+/**
+ * Resolve depots for scenario chart from multiple sources
+ * Priority: window.allDepotsData > window.filteredDepotsData > window.KDS?.depots > API fetch
+ * @returns {Promise<Array>} Array of raw depot objects
+ */
+async function resolveDepotsForScenarioChart() {
+    // Priority A: window.allDepotsData
+    if (window.allDepotsData && Array.isArray(window.allDepotsData) && window.allDepotsData.length > 0) {
+        return window.allDepotsData;
+    }
+    
+    // Priority B: window.filteredDepotsData
+    if (window.filteredDepotsData && Array.isArray(window.filteredDepotsData) && window.filteredDepotsData.length > 0) {
+        return window.filteredDepotsData;
+    }
+    
+    // Priority C: window.KDS?.depots
+    if (window.KDS && window.KDS.depots && Array.isArray(window.KDS.depots) && window.KDS.depots.length > 0) {
+        return window.KDS.depots;
+    }
+    
+    // Priority D: Fetch from API
+    try {
+        const depotsResponse = await fetch(`${API_BASE_URL}/depolar-detay`);
+        if (depotsResponse.ok) {
+            const depotsData = await depotsResponse.json();
+            // Accept multiple response formats
+            if (depotsData.success) {
+                if (Array.isArray(depotsData.depolar)) {
+                    return depotsData.depolar;
+                }
+                if (Array.isArray(depotsData.depots)) {
+                    return depotsData.depots;
+                }
+                if (Array.isArray(depotsData.data)) {
+                    return depotsData.data;
+                }
+            }
+            // If direct array
+            if (Array.isArray(depotsData)) {
+                return depotsData;
+            }
+        }
+    } catch (depotError) {
+        console.warn('⚠️ Could not fetch depot details for scenarios:', depotError);
+    }
+    
+    return [];
+}
+
+/**
+ * Normalize depot object to standard format
+ * @param {Object} depot - Raw depot object
+ * @returns {Object|null} Normalized depot or null if invalid
+ */
+function normalizeDepot(depot) {
+    const name = depot.ad || depot.depo_adi || depot.name;
+    if (!name) {
+        return null; // Filter out invalid depots
+    }
+    
+    return {
+        name: name,
+        capacityDb: Number(depot.kapasite_db || depot.kapasite || depot.capacityDb || 0),
+        distanceKm: Number(depot.mesafe_km || depot.mesafe || depot.distance_km || depot.distanceKm || 0),
+        suitability: Number(depot.uygunluk_skoru || depot.skor || depot.score || depot.suitability || 0),
+        raw: depot // Keep original for reference
+    };
+}
+
+/**
+ * Initialize Capacity Scenario Chart (Bar Chart)
+ * Shows capacity usage scenarios: Current, + En Yakın Depo, + En Uygun Depo, + En Büyük Kapasite
+ */
+async function initCapacityScenarioChart() {
+    const canvas = document.getElementById('capacity-scenario-chart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    
+    // Store instance in window for safe updates
+    if (!window.capacityScenarioChart) {
+        window.capacityScenarioChart = null;
+    }
+    
+    const currentCapacityDb = 1875; // Main store capacity constant
+    const forecastUsedDb = 1400; // Placeholder until real forecast is wired
+    
+    try {
+        // Resolve depots from multiple sources
+        const rawDepots = await resolveDepotsForScenarioChart();
+        
+        // Normalize and filter depots
+        const normalizedDepots = rawDepots
+            .map(normalizeDepot)
+            .filter(d => d !== null); // Remove invalid depots
+        
+        const hasDepotData = normalizedDepots.length > 0;
+        
+        // Find specific depots for scenarios
+        let enYakinDepo = null;
+        let enUygunDepo = null;
+        let enBuyukKapasite = null;
+        
+        if (hasDepotData) {
+            // Scenario 1: "+ En Yakın Depo" (minimum distance, prefer distanceKm > 0)
+            const depotsWithDistance = normalizedDepots.filter(d => d.distanceKm > 0);
+            if (depotsWithDistance.length > 0) {
+                enYakinDepo = depotsWithDistance.reduce((closest, depot) => {
+                    return depot.distanceKm < closest.distanceKm ? depot : closest;
+                });
+            } else {
+                // Fallback: use depot with minimum distance (even if 0)
+                enYakinDepo = normalizedDepots.reduce((closest, depot) => {
+                    return depot.distanceKm < closest.distanceKm ? depot : closest;
+                });
+            }
+            
+            // Scenario 2: "+ En Uygun Depo" (maximum suitability, fallback to first if all 0)
+            const depotsWithSuitability = normalizedDepots.filter(d => d.suitability > 0);
+            if (depotsWithSuitability.length > 0) {
+                enUygunDepo = depotsWithSuitability.reduce((best, depot) => {
+                    return depot.suitability > best.suitability ? depot : best;
+                });
+            } else {
+                // Fallback: use first depot if all suitability scores are 0
+                enUygunDepo = normalizedDepots[0];
+            }
+            
+            // Scenario 3: "+ En Büyük Kapasite" (maximum capacity)
+            enBuyukKapasite = normalizedDepots.reduce((largest, depot) => {
+                return depot.capacityDb > largest.capacityDb ? depot : largest;
+            });
+        }
+        
+        // Build scenario data (always 4 scenarios if depots exist)
+        const scenarioLabels = ['Mevcut Durum'];
+        const totalCapacityData = [currentCapacityDb];
+        const usedCapacityData = [forecastUsedDb];
+        
+        // Add scenarios if depots found
+        if (hasDepotData) {
+            if (enYakinDepo) {
+                scenarioLabels.push('+ En Yakın Depo');
+                totalCapacityData.push(currentCapacityDb + enYakinDepo.capacityDb);
+                usedCapacityData.push(forecastUsedDb);
+            }
+            
+            if (enUygunDepo) {
+                scenarioLabels.push('+ En Uygun Depo');
+                totalCapacityData.push(currentCapacityDb + enUygunDepo.capacityDb);
+                usedCapacityData.push(forecastUsedDb);
+            }
+            
+            if (enBuyukKapasite) {
+                scenarioLabels.push('+ En Büyük Kapasite');
+                totalCapacityData.push(currentCapacityDb + enBuyukKapasite.capacityDb);
+                usedCapacityData.push(forecastUsedDb);
+            }
+        }
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Update existing chart or create new one
+        if (window.capacityScenarioChart) {
+            // Update existing chart data
+            window.capacityScenarioChart.data.labels = scenarioLabels;
+            window.capacityScenarioChart.data.datasets[0].data = totalCapacityData;
+            window.capacityScenarioChart.data.datasets[1].data = usedCapacityData;
+            window.capacityScenarioChart.update();
+            
+            // Update error message visibility - hide if we have scenarios beyond "Mevcut Durum"
+            const errorNote = document.getElementById('capacity-scenario-error-note');
+            if (errorNote) {
+                const hasScenarios = scenarioLabels.length > 1;
+                errorNote.style.display = hasScenarios ? 'none' : 'block';
+            }
+            
+            return;
+        }
+        
+        // Create new chart instance
+        window.capacityScenarioChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: scenarioLabels,
+                datasets: [
+                    {
+                        label: 'Toplam Kapasite',
+                        data: totalCapacityData,
+                        backgroundColor: '#0F2038',
+                        borderColor: '#1a3a5c',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Tahmini Kullanım (3 Ay)',
+                        data: usedCapacityData,
+                        backgroundColor: '#f59e0b',
+                        borderColor: '#d97706',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                                size: 12,
+                                family: 'Outfit, sans-serif'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(10, 37, 64, 0.95)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                const value = context.parsed.y;
+                                return `${label}: ${formatDbValue(value)} DB`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: false, // Grouped bars
+                        ticks: {
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    y: {
+                        stacked: false, // Grouped bars
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return formatDbValue(value) + ' DB';
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Kapasite (DB)',
+                            font: {
+                                size: 12,
+                                weight: '500'
+                            }
+                        }
+                    }
+                },
+                barPercentage: 0.9,
+                categoryPercentage: 0.6
+            }
+        });
+        
+        // Store in module variable for compatibility
+        capacityScenarioChartInstance = window.capacityScenarioChart;
+        
+        // Show/hide error note - hide if we have scenarios beyond "Mevcut Durum"
+        const errorNote = document.getElementById('capacity-scenario-error-note');
+        if (errorNote) {
+            const hasScenarios = scenarioLabels.length > 1;
+            errorNote.style.display = hasScenarios ? 'none' : 'block';
+        }
+        
+    } catch (error) {
+        console.error('❌ Error initializing capacity scenario chart:', error);
+        
+        // Show fallback chart with just "Mevcut Durum"
+        const ctx = canvas.getContext('2d');
+        if (window.capacityScenarioChart) {
+            window.capacityScenarioChart.destroy();
+            window.capacityScenarioChart = null;
+        }
+        
+        window.capacityScenarioChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Mevcut Durum'],
+                datasets: [
+                    {
+                        label: 'Toplam Kapasite',
+                        data: [currentCapacityDb],
+                        backgroundColor: '#0F2038',
+                        borderColor: '#1a3a5c',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Tahmini Kullanım (3 Ay)',
+                        data: [1400], // Placeholder until real forecast is wired
+                        backgroundColor: '#f59e0b',
+                        borderColor: '#d97706',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+        
+        capacityScenarioChartInstance = window.capacityScenarioChart;
+        
+        // Show error note
+        const errorNote = document.getElementById('capacity-scenario-error-note');
+        if (errorNote) {
+            errorNote.style.display = 'block';
+        }
+    }
 }
 
 // ======================
@@ -3382,6 +4158,291 @@ function init() {
     // Initialize Decision Panel charts with static demo data
     initDecisionPanelCharts();
     
+    // Initialize suitability weights settings panel
+    initSuitabilityWeightsPanel();
+    
+    // Update tooltip with current weights
+    updateSuitabilityTooltip();
+    
+}
+
+/**
+ * Initialize suitability weights settings panel
+ */
+function initSuitabilityWeightsPanel() {
+    const settingsBtn = document.getElementById('best-depots-weights-btn');
+    const panel = document.getElementById('best-depots-weights-popover');
+    const closeBtn = document.getElementById('weights-panel-close');
+    const applyBtn = document.getElementById('weights-apply-btn');
+    const resetBtn = document.getElementById('weights-reset-btn');
+    const distanceInput = document.getElementById('weight-distance');
+    const rentInput = document.getElementById('weight-rent');
+    const capacityInput = document.getElementById('weight-capacity');
+    const totalValue = document.getElementById('weights-total-value');
+    const errorEl = document.getElementById('weights-error');
+    
+    // Check if essential elements exist
+    if (!panel) {
+        console.warn('Suitability weights panel not found in DOM');
+        return;
+    }
+    
+    if (!settingsBtn && !closeBtn && !applyBtn && !resetBtn) {
+        console.warn('Suitability weights controls not found in DOM');
+        return;
+    }
+    
+    // Load current weights into inputs
+    function loadWeightsToInputs() {
+        const weights = getSuitabilityWeights();
+        if (distanceInput) distanceInput.value = weights.distance;
+        if (rentInput) rentInput.value = weights.rent;
+        if (capacityInput) capacityInput.value = weights.capacity;
+        updateTotalDisplay();
+    }
+    
+    // Update total display
+    function updateTotalDisplay() {
+        const distance = parseFloat(distanceInput?.value || 0);
+        const rent = parseFloat(rentInput?.value || 0);
+        const capacity = parseFloat(capacityInput?.value || 0);
+        const total = distance + rent + capacity;
+        
+        if (totalValue) {
+            totalValue.textContent = total.toFixed(0);
+            totalValue.style.color = Math.abs(total - 100) < 0.01 ? '' : 'var(--color-warning, #f59e0b)';
+        }
+        
+        // Hide error if total is valid
+        if (errorEl && Math.abs(total - 100) < 0.01) {
+            errorEl.classList.add('hidden');
+        }
+    }
+    
+    // Auto-adjust other weights when one is changed
+    function adjustWeights(changedInput) {
+        const distance = parseFloat(distanceInput?.value || 0);
+        const rent = parseFloat(rentInput?.value || 0);
+        const capacity = parseFloat(capacityInput?.value || 0);
+        const total = distance + rent + capacity;
+        
+        if (total === 0) return; // Avoid division by zero
+        
+        // Calculate what the other two should be to sum to 100
+        const targetTotal = 100;
+        const otherTotal = total - parseFloat(changedInput.value);
+        
+        if (otherTotal <= 0) {
+            // If changed value is >= 100, set others to 0 and clamp changed
+            if (changedInput === distanceInput) {
+                distanceInput.value = Math.min(100, parseFloat(distanceInput.value));
+                rentInput.value = 0;
+                capacityInput.value = 0;
+            } else if (changedInput === rentInput) {
+                rentInput.value = Math.min(100, parseFloat(rentInput.value));
+                distanceInput.value = 0;
+                capacityInput.value = 0;
+            } else {
+                capacityInput.value = Math.min(100, parseFloat(capacityInput.value));
+                distanceInput.value = 0;
+                rentInput.value = 0;
+            }
+            updateTotalDisplay();
+            return;
+        }
+        
+        // Proportionally adjust the other two
+        const ratio = (targetTotal - parseFloat(changedInput.value)) / otherTotal;
+        
+        if (changedInput === distanceInput) {
+            rentInput.value = Math.max(0, Math.min(100, Math.round(rent * ratio)));
+            capacityInput.value = targetTotal - parseFloat(distanceInput.value) - parseFloat(rentInput.value);
+        } else if (changedInput === rentInput) {
+            distanceInput.value = Math.max(0, Math.min(100, Math.round(distance * ratio)));
+            capacityInput.value = targetTotal - parseFloat(rentInput.value) - parseFloat(distanceInput.value);
+        } else {
+            distanceInput.value = Math.max(0, Math.min(100, Math.round(distance * ratio)));
+            rentInput.value = targetTotal - parseFloat(capacityInput.value) - parseFloat(distanceInput.value);
+        }
+        
+        updateTotalDisplay();
+    }
+    
+    // Function to open panel
+    function openPanel() {
+        loadWeightsToInputs();
+        panel.classList.remove('hidden');
+        // Focus first input for accessibility
+        if (distanceInput) {
+            setTimeout(() => distanceInput.focus(), 100);
+        }
+    }
+    
+    // Function to close panel
+    function closePanel() {
+        panel.classList.add('hidden');
+        if (errorEl) errorEl.classList.add('hidden');
+        // Return focus to settings button
+        if (settingsBtn) {
+            settingsBtn.focus();
+        }
+    }
+    
+    // Open panel - use event delegation if button doesn't exist yet
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openPanel();
+        });
+        
+        // Keyboard support for settings button
+        settingsBtn.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openPanel();
+            }
+        });
+    } else {
+        // Use event delegation as fallback
+        document.addEventListener('click', function(e) {
+            const target = e.target.closest('#best-depots-weights-btn');
+            if (target) {
+                e.preventDefault();
+                e.stopPropagation();
+                openPanel();
+            }
+        });
+        
+        document.addEventListener('keydown', function(e) {
+            const target = document.getElementById('best-depots-weights-btn');
+            if (target && document.activeElement === target && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                openPanel();
+            }
+        });
+    }
+    
+    // Close panel handlers
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            closePanel();
+        });
+    }
+    
+    // Close on backdrop click (clicking on panel background)
+    panel.addEventListener('click', function(e) {
+        if (e.target === panel) {
+            closePanel();
+        }
+    });
+    
+    // Close on Escape key
+    let escapeHandler = function(e) {
+        if (e.key === 'Escape' && !panel.classList.contains('hidden')) {
+            closePanel();
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
+    
+    // Close when clicking outside the panel
+    // Use capture phase to check before other handlers
+    document.addEventListener('click', function(e) {
+        // Only handle if panel is open
+        if (panel.classList.contains('hidden')) {
+            return;
+        }
+        
+        // Check if click is on the settings button (will be handled by open handler)
+        if (e.target.closest('#best-depots-weights-btn')) {
+            return;
+        }
+        
+        // Check if click is inside the panel
+        if (e.target.closest('#best-depots-weights-popover')) {
+            return;
+        }
+        
+        // Click is outside, close the panel
+        closePanel();
+    }, true);
+    
+    // Input change handlers
+    [distanceInput, rentInput, capacityInput].forEach(input => {
+        if (!input) return;
+        
+        input.addEventListener('input', function() {
+            // Clamp value
+            let value = parseFloat(this.value || 0);
+            value = Math.max(0, Math.min(100, value));
+            this.value = value;
+            
+            adjustWeights(this);
+        });
+        
+        input.addEventListener('blur', function() {
+            // Ensure value is valid on blur
+            let value = parseFloat(this.value || 0);
+            value = Math.max(0, Math.min(100, value));
+            this.value = value;
+            updateTotalDisplay();
+        });
+    });
+    
+    // Apply button
+    applyBtn.addEventListener('click', function() {
+        const distance = parseFloat(distanceInput?.value || 0);
+        const rent = parseFloat(rentInput?.value || 0);
+        const capacity = parseFloat(capacityInput?.value || 0);
+        const total = distance + rent + capacity;
+        
+        if (Math.abs(total - 100) > 0.01) {
+            if (errorEl) {
+                errorEl.textContent = 'Toplam %100 olmalıdır. Lütfen değerleri ayarlayın.';
+                errorEl.classList.remove('hidden');
+            }
+            return;
+        }
+        
+        // Validate all are non-negative
+        if (distance < 0 || rent < 0 || capacity < 0) {
+            if (errorEl) {
+                errorEl.textContent = 'Tüm değerler 0 veya pozitif olmalıdır.';
+                errorEl.classList.remove('hidden');
+            }
+            return;
+        }
+        
+        // Save weights
+        const normalized = setSuitabilityWeights({ distance, rent, capacity });
+        
+        // Update tooltip
+        updateSuitabilityTooltip();
+        
+        // Reload depots with new weights
+        loadBestDepots();
+        
+        // Close panel
+        closePanel();
+    });
+    
+    // Reset button
+    resetBtn.addEventListener('click', function() {
+        // Reset to defaults
+        setSuitabilityWeights(DEFAULT_WEIGHTS);
+        loadWeightsToInputs();
+        
+        // Update tooltip
+        updateSuitabilityTooltip();
+        
+        // Reload depots with default weights
+        loadBestDepots();
+    });
+    
+    // Initial load
+    loadWeightsToInputs();
 }
 
 // Run initialization when DOM is ready

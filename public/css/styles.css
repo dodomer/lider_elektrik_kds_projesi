@@ -1100,6 +1100,7 @@ body.modal-open {
 
 /* Chart card header with left/right layout */
 .card-header-chart {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2048,6 +2049,52 @@ body.modal-open {
     max-width: 900px;
 }
 
+/* Mevcut Depolarım Modal - Large Size */
+.modal-owned-depots {
+    width: 88vw;
+    max-width: 1400px;
+    height: 84vh;
+    max-height: 84vh;
+}
+
+/* Ensure modal body scrolls properly in owned depots modal */
+.modal-owned-depots .modal-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Ensure table container fits properly in owned depots modal */
+.modal-owned-depots .depolar-table-container {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* Responsive: smaller screens */
+@media (max-width: 1024px) {
+    .modal-owned-depots {
+        width: 95vw;
+        max-width: 95vw;
+        height: 90vh;
+        max-height: 90vh;
+    }
+}
+
+@media (max-width: 768px) {
+    .modal-owned-depots {
+        width: 95vw;
+        max-width: 95vw;
+        height: 90vh;
+        max-height: 90vh;
+    }
+}
+
 /* Ensure form inside modal doesn't interfere with scrolling */
 .modal-container form {
     display: flex;
@@ -2447,6 +2494,7 @@ input[readonly]:focus {
 }
 
 /* Ensure tooltip positioning for card header */
+.card-header .help-icon-inline,
 .card-header-chart .help-icon-inline {
     position: relative;
     z-index: 100;
@@ -2916,6 +2964,62 @@ input[readonly]:focus {
     gap: var(--space-md);
 }
 
+.depolar-header-buttons {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+}
+
+@media (max-width: 768px) {
+    .depolar-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .depolar-header-buttons {
+        width: 100%;
+        justify-content: stretch;
+    }
+    
+    .depolar-header-buttons .btn-secondary,
+    .depolar-header-buttons .btn-primary {
+        flex: 1;
+    }
+}
+
+/* Status badges for owned depots */
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-badge-critical {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.status-badge-normal {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Occupancy percentage styling */
+.occupancy-critical {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.occupancy-normal {
+    color: var(--text-primary);
+}
+
 .depolar-section .section-title {
     font-size: 1.25rem;
     font-weight: 700;
@@ -3047,6 +3151,24 @@ input[readonly]:focus {
 
 .depolar-table th:last-child {
     width: 200px;
+}
+
+/* Fix column widths for Metrekare and Yükseklik in Mevcut Depolarım modal */
+#mevcut-depolarim-table th:nth-child(9),
+#mevcut-depolarim-table th:nth-child(10) {
+    min-width: 120px;
+    width: 120px;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.3;
+}
+
+/* Ensure table cells in these columns also have proper width */
+#mevcut-depolarim-table td:nth-child(9),
+#mevcut-depolarim-table td:nth-child(10) {
+    min-width: 120px;
+    width: 120px;
 }
 
 /* Action buttons in depolar table */
@@ -3669,6 +3791,11 @@ input[readonly]:focus {
     align-items: start;
 }
 
+/* Equal height for specific chart rows */
+.charts-grid-equal-height {
+    align-items: stretch;
+}
+
 .charts-grid-main {
     margin-bottom: var(--space-lg);
 }
@@ -3677,8 +3804,32 @@ input[readonly]:focus {
     margin-bottom: 0;
 }
 
+/* Add spacing between chart rows */
+.charts-grid-supporting + .charts-grid-supporting {
+    margin-top: 40px;
+}
+
 .card-chart {
     min-height: 350px;
+}
+
+/* Ensure cards in equal-height rows stretch to fill grid cells */
+.charts-grid-equal-height .card-chart {
+    height: 100%;
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+}
+
+.charts-grid-equal-height .card-chart .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.charts-grid-equal-height .card-chart .chart-container {
+    flex: 1;
+    min-height: 0;
 }
 
 .card-header-chart {
@@ -3899,6 +4050,235 @@ input[readonly]:focus {
     
     .depot-details {
         width: 100%;
+    }
+}
+
+/* =====================
+   Suitability Weights Settings Panel
+   ===================== */
+
+.settings-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0.25rem 0.5rem;
+    margin-left: 0.5rem;
+    color: var(--text-secondary);
+    transition: color 0.2s ease, transform 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    user-select: none;
+}
+
+.settings-icon:hover,
+.settings-icon:focus {
+    color: var(--color-primary);
+    transform: rotate(90deg);
+    outline: none;
+}
+
+.settings-icon:active {
+    transform: rotate(90deg) scale(0.95);
+}
+
+.suitability-weights-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 9999;
+    min-width: 320px;
+    max-width: 400px;
+    animation: slideDown 0.2s ease-out;
+    pointer-events: auto;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.weights-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.weights-panel-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.weights-panel-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.weights-panel-close:hover {
+    color: var(--text-primary);
+}
+
+.weights-panel-body {
+    padding: 1rem;
+}
+
+.weights-panel-description {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0 0 1rem 0;
+    line-height: 1.5;
+}
+
+.weights-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.weights-input-group label {
+    flex: 0 0 120px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.weights-input-group input {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-family: var(--font-main);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.weights-input-group input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(255, 200, 87, 0.25);
+}
+
+.weight-percentage {
+    flex: 0 0 20px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.weights-total {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    margin: 1rem 0;
+    background: var(--bg-card-hover);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.weights-total span:first-child {
+    color: var(--text-secondary);
+}
+
+.weights-total #weights-total-value {
+    color: var(--color-primary);
+    font-size: 1rem;
+}
+
+.weights-panel-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.weights-panel-actions button {
+    flex: 1;
+    padding: 0.625rem 1rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: var(--font-main);
+}
+
+.weights-panel-actions .btn-primary {
+    background: var(--color-primary);
+    color: var(--text-inverse);
+}
+
+.weights-panel-actions .btn-primary:hover {
+    background: var(--color-primary-light);
+}
+
+.weights-panel-actions .btn-secondary {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border-medium);
+}
+
+.weights-panel-actions .btn-secondary:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-medium);
+}
+
+.weights-error {
+    margin-top: 0.75rem;
+    padding: 0.625rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: var(--radius-sm);
+    color: var(--color-danger);
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+@media (max-width: 640px) {
+    .suitability-weights-panel {
+        right: auto;
+        left: 0;
+        min-width: calc(100vw - 2rem);
+        max-width: calc(100vw - 2rem);
+    }
+    
+    .weights-input-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .weights-input-group label {
+        flex: none;
     }
 }
 

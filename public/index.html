@@ -79,7 +79,7 @@
                 </div>
                 <button class="btn-primary" id="run-analysis-btn">
                     <span class="btn-icon">🔍</span>
-                    Analiz Sayfası
+                    Depo Sayfası
                 </button>
             </section>
 
@@ -262,10 +262,45 @@
                                 <span class="card-icon">🏆</span>
                                 <h3>En Uygun Depolar</h3>
                                 <span class="help-icon help-icon-inline" id="best-depots-help-icon" tabindex="0" role="button" aria-label="Uygunluk skoru hesaplama bilgisi">?
-                                    <span class="tooltip tooltip-wide">Uygunluk skoru; Mesafe, Aylık Kira ve Kapasite kriterlerinin 0–100 aralığına normalize edilip ağırlıklandırılmasıyla hesaplanır.<br><br>Ağırlıklar: Mesafe %40, Aylık Kira %35, Kapasite %25.<br><br>Formül: Skor = (MesafeSkoru×0.40) + (KiraSkoru×0.35) + (KapasiteSkoru×0.25).<br><br>Not: Yakın ve ucuz depolar daha yüksek puan alır; kapasite arttıkça puan artar.</span>
+                                    <span class="tooltip tooltip-wide">Uygunluk skoru; Mesafe, Aylık Kira ve Kapasite kriterlerinin 0–100 aralığına normalize edilip ağırlıklandırılmasıyla hesaplanır.<br><br>Ağırlıklar: Mesafe %50, Aylık Kira %30, Kapasite %20.<br><br>Formül: Skor = (MesafeSkoru×0.50) + (KiraSkoru×0.30) + (KapasiteSkoru×0.20).<br><br>Not: Yakın ve ucuz depolar daha yüksek puan alır; kapasite arttıkça puan artar.</span>
                                 </span>
+                                <button type="button" class="settings-icon help-icon-inline" id="best-depots-weights-btn" tabindex="0" aria-label="Ağırlık ayarlarını aç" title="Ağırlık Ayarları">⚙️</button>
                             </div>
                             <a href="#" class="link-detail" id="link-warehouse-comparison" onclick="event.preventDefault(); if(window.KDS) window.KDS.showAnalysisSection();">Detaya Git →</a>
+                            <!-- Suitability Weights Settings Panel -->
+                            <div class="suitability-weights-panel hidden" id="best-depots-weights-popover">
+                                <div class="weights-panel-header">
+                                    <h4>Ağırlık Ayarları</h4>
+                                    <button class="weights-panel-close" id="weights-panel-close" aria-label="Kapat">&times;</button>
+                                </div>
+                                <div class="weights-panel-body">
+                                    <p class="weights-panel-description">Uygunluk skorunu hesaplamak için kullanılan ağırlıkları ayarlayın. Toplam %100 olmalıdır.</p>
+                                    <div class="weights-input-group">
+                                        <label for="weight-distance">Mesafe (%):</label>
+                                        <input type="number" id="weight-distance" min="0" max="100" step="1" value="50">
+                                        <span class="weight-percentage">%</span>
+                                    </div>
+                                    <div class="weights-input-group">
+                                        <label for="weight-rent">Aylık Kira (%):</label>
+                                        <input type="number" id="weight-rent" min="0" max="100" step="1" value="30">
+                                        <span class="weight-percentage">%</span>
+                                    </div>
+                                    <div class="weights-input-group">
+                                        <label for="weight-capacity">Kapasite (%):</label>
+                                        <input type="number" id="weight-capacity" min="0" max="100" step="1" value="20">
+                                        <span class="weight-percentage">%</span>
+                                    </div>
+                                    <div class="weights-total">
+                                        <span>Toplam: </span>
+                                        <span id="weights-total-value">100</span>%
+                                    </div>
+                                    <div class="weights-panel-actions">
+                                        <button class="btn-secondary" id="weights-reset-btn">Varsayılana Dön</button>
+                                        <button class="btn-primary" id="weights-apply-btn">Uygula</button>
+                                    </div>
+                                    <div class="weights-error hidden" id="weights-error"></div>
+                                </div>
+                            </div>
                         </div>
                         <div class="card-body">
                             <!-- Content -->
@@ -311,6 +346,45 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Depot Cost & Capacity Analysis Charts Row -->
+                <div class="charts-grid charts-grid-supporting charts-grid-equal-height">
+                    <div class="card card-chart">
+                        <div class="card-header card-header-chart">
+                            <div class="card-header-left">
+                                <span class="card-icon">💰</span>
+                                <h3>Depo Bazlı Toplam Maliyet (Aylık)</h3>
+                                <span class="help-icon help-icon-inline" id="transport-cost-help-icon" tabindex="0" role="button" aria-label="Ulaştırma maliyeti hesaplama bilgisi">?
+                                    <span class="tooltip tooltip-wide">Tahmini ulaştırma maliyeti, sabit tır ücreti ve mesafeye bağlı yakıt tüketimi dikkate alınarak hesaplanır.<br><br><strong>Formül:</strong><br>Ulaştırma Maliyeti = 15.000 ₺ + (Mesafe (km) × (35 / 100) × 53,08)<br><br><strong>Açıklama:</strong><br>• 15.000 ₺: Sabit tır taşıma ücreti<br>• 35 litre / 100 km: Ortalama tır yakıt tüketimi<br>• 53,08 ₺ / litre: Güncel yakıt birim fiyatı<br><br><strong>Not:</strong> Mesafe arttıkça ulaştırma maliyeti doğrusal olarak artar.</span>
+                                </span>
+                            </div>
+                            <button type="button" class="btn-secondary btn-chart-toggle" id="depot-cost-toggle-btn" style="display: none;">
+                                Tüm Depoları Göster
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="depot-cost-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card card-chart">
+                        <div class="card-header card-header-chart">
+                            <div class="card-header-left">
+                                <span class="card-icon">📊</span>
+                                <h3>Kapasite Kullanım Senaryosu</h3>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="capacity-scenario-chart"></canvas>
+                            </div>
+                            <p id="capacity-scenario-error-note" style="display: none; margin-top: 1rem; font-size: 0.875rem; color: var(--text-secondary); text-align: center;">
+                                Senaryo oluşturmak için depo verisi bulunamadı.
+                            </p>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- Inflation & Stock Strategy Section -->
@@ -349,6 +423,9 @@
                         <div class="card-header">
                             <span class="card-icon">🧮</span>
                             <h3>Enflasyon Hesaplama Aracı</h3>
+                            <span class="help-icon help-icon-inline" id="inflation-calc-help-icon" tabindex="0" role="button" aria-label="Enflasyon hesaplama bilgisi">?
+                                <span class="tooltip tooltip-wide">Hesaplanan enflasyon, girilen ürünlerin alış fiyatlarındaki ortalama artış oranıdır.<br><br><strong>Her ürün için:</strong><br>Artış (%) = ((Yeni − Önceki) / Önceki) × 100<br><br><strong>Sonuç:</strong><br>Girilen ürünlerin Artış(%) değerlerinin ortalaması alınır.<br><br><strong>Not:</strong> Önceki fiyat 0 olamaz; boş alanlar hesaba katılmaz.</span>
+                            </span>
                         </div>
                         <div class="card-body inflation-calculator">
                             <div class="inflation-table">
@@ -587,7 +664,7 @@
         <div id="analysis-section" class="hidden">
             <!-- Section Header -->
             <section class="section-header">
-                <h2>📊 Analiz Sonuçları (TEST)</h2>
+                <h2>📊 Depolar</h2>
                 <button class="btn-secondary" id="back-to-overview-btn">
                     <span class="btn-icon">←</span>
                     Ana Ekrana Dön
@@ -600,10 +677,16 @@
                 <section class="depolar-section">
                     <div class="depolar-header">
                         <h2 class="section-title">Depolar</h2>
-                        <button class="btn-primary" id="yeni-depo-ekle-btn">
-                            <span class="btn-icon">➕</span>
-                            Yeni Depo Ekle
-                        </button>
+                        <div class="depolar-header-buttons">
+                            <button class="btn-secondary" id="mevcut-depolarim-btn">
+                                <span class="btn-icon">📦</span>
+                                Mevcut Depolarım
+                            </button>
+                            <button class="btn-primary" id="yeni-depo-ekle-btn">
+                                <span class="btn-icon">➕</span>
+                                Yeni Depo Ekle
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- Search and Sort Controls -->
@@ -1015,6 +1098,52 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" id="delete-depot-cancel-btn">İptal</button>
                 <button type="button" class="btn btn-danger" id="delete-depot-confirm-btn">Sil</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mevcut Depolarım Modal -->
+    <div id="mevcut-depolarim-modal" class="modal hidden">
+        <div class="modal-backdrop" id="mevcut-depolarim-modal-backdrop"></div>
+        <div class="modal-container modal-lg modal-owned-depots">
+            <div class="modal-header">
+                <h3>📦 Mevcut Depolarım</h3>
+                <button class="modal-close-btn" id="mevcut-depolarim-modal-close-btn" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="mevcut-depolarim-loading" class="loading-state">
+                    <div class="loading-spinner"></div>
+                    <p>Depolar yükleniyor...</p>
+                </div>
+                <div id="mevcut-depolarim-content" class="hidden">
+                    <div id="mevcut-depolarim-table-container" class="depolar-table-container">
+                        <table class="depolar-table" id="mevcut-depolarim-table">
+                            <thead>
+                                <tr>
+                                    <th>Fotoğraf</th>
+                                    <th>Depo Adı</th>
+                                    <th>Mesafe (km)</th>
+                                    <th>Aylık Kira (₺)</th>
+                                    <th>Kapasite (DB)</th>
+                                    <th>Kullanılan (DB)</th>
+                                    <th>Doluluk Oranı</th>
+                                    <th>Durum</th>
+                                    <th title="Metrekare (m²)">Metrekare</th>
+                                    <th title="Yükseklik (m)">Yükseklik (m)</th>
+                                    <th>Adres</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mevcut-depolarim-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="mevcut-depolarim-empty" class="no-data-cell hidden" style="text-align: center; padding: 2rem;">
+                        <p>Henüz satın alınmış depo bulunmamaktadır.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="mevcut-depolarim-close-btn">Kapat</button>
             </div>
         </div>
     </div>
@@ -1487,9 +1616,20 @@
           .then(depolar => {
             if (Array.isArray(depolar)) {
               depolar.forEach(depo => {
-                const lat = depo.latitude ?? depo.enlem;
-                const lng = depo.longitude ?? depo.boylam;
-                if (!lat || !lng) return;
+                // Validate coordinates: use latitude/longitude or enlem/boylam, ensure they are finite numbers
+                const lat = Number(depo.latitude ?? depo.enlem);
+                const lng = Number(depo.longitude ?? depo.boylam);
+                
+                // Skip marker if lat/lng are not finite numbers
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                  console.warn('⚠️ Skipping depot marker - invalid coordinates:', {
+                    id: depo.id || depo.lokasyon_id,
+                    name: depo.name || depo.depo_adi || 'Depo',
+                    lat: depo.latitude ?? depo.enlem,
+                    lng: depo.longitude ?? depo.boylam
+                  });
+                  return;
+                }
                 
                 const marker = L.marker([lat, lng]).addTo(depoMap);
                 const name = depo.name || depo.depo_adi || 'Depo';
@@ -1804,6 +1944,35 @@
           });
         }
 
+        // Event listeners for Mevcut Depolarım Modal
+        const mevcutDepolarimBtn = document.getElementById('mevcut-depolarim-btn');
+        const mevcutDepolarimModal = document.getElementById('mevcut-depolarim-modal');
+        const mevcutDepolarimModalBackdrop = document.getElementById('mevcut-depolarim-modal-backdrop');
+        const mevcutDepolarimModalClose = document.getElementById('mevcut-depolarim-modal-close-btn');
+        const mevcutDepolarimCloseBtn = document.getElementById('mevcut-depolarim-close-btn');
+        
+        if (mevcutDepolarimBtn) {
+          mevcutDepolarimBtn.addEventListener('click', openOwnedDepotsModal);
+        }
+        if (mevcutDepolarimModalBackdrop) {
+          mevcutDepolarimModalBackdrop.addEventListener('click', closeOwnedDepotsModal);
+        }
+        if (mevcutDepolarimModalClose) {
+          mevcutDepolarimModalClose.addEventListener('click', closeOwnedDepotsModal);
+        }
+        if (mevcutDepolarimCloseBtn) {
+          mevcutDepolarimCloseBtn.addEventListener('click', closeOwnedDepotsModal);
+        }
+        
+        // Keyboard navigation for Mevcut Depolarım Modal
+        document.addEventListener('keydown', function(e) {
+          if (mevcutDepolarimModal && !mevcutDepolarimModal.classList.contains('hidden')) {
+            if (e.key === 'Escape') {
+              closeOwnedDepotsModal();
+            }
+          }
+        });
+
         // Event listeners for Yeni Depo Modal
         if (yeniDepoBtn) {
           yeniDepoBtn.addEventListener('click', openYeniDepoModal);
@@ -1869,50 +2038,13 @@
                 closeYeniDepoModal();
                 
                 // Refresh depots table
-                loadDepotsTable();
+                if (typeof loadDepotsTable === 'function') {
+                  loadDepotsTable();
+                }
                 
-                // Refresh map markers
-                if (depoMapInitialized && depoMap) {
-                  // Clear existing markers (except business)
-                  depoMarkers.forEach((marker) => {
-                    depoMap.removeLayer(marker);
-                  });
-                  depoMarkers.clear();
-                  
-                  // Reload depots and add markers
-                  fetch('/api/depots')
-                    .then(response => response.json())
-                    .then(depolar => {
-                      if (Array.isArray(depolar)) {
-                        depolar.forEach(depo => {
-                          const lat = depo.latitude ?? depo.enlem;
-                          const lng = depo.longitude ?? depo.boylam;
-                          if (!lat || !lng) return;
-                          
-                          const marker = L.marker([lat, lng]).addTo(depoMap);
-                          const name = depo.name || depo.depo_adi || 'Depo';
-                          marker.bindPopup(`<strong>${name}</strong>`);
-                          
-                          const depoId = depo.id || depo.lokasyon_id;
-                          if (depoId) {
-                            depoMarkers.set(depoId, marker);
-                          }
-                        });
-                        
-                        // Fit bounds to show all markers
-                        const allMarkers = Array.from(depoMarkers.values());
-                        if (allMarkers.length > 0) {
-                          const businessMarker = Array.from(depoMarkers.values())[0];
-                          if (businessMarker) {
-                            const group = new L.featureGroup([businessMarker, ...allMarkers]);
-                            depoMap.fitBounds(group.getBounds().pad(0.1));
-                          }
-                        }
-                      }
-                    })
-                    .catch(err => {
-                      console.error('❌ Depo verileri yüklenirken hata:', err);
-                    });
+                // Refresh map markers using the centralized function
+                if (typeof loadDepotsForMap === 'function') {
+                  loadDepotsForMap();
                 }
                 
                 // Show success message (optional)
@@ -2050,6 +2182,18 @@
             if (typeof updateMarkerPopup === 'function') {
               updateMarkerPopup(lokasyonId, { sahip_miyiz: 1 });
             }
+            
+            // Refresh owned depots list if modal is open
+            const ownedModal = document.getElementById('mevcut-depolarim-modal');
+            if (ownedModal && !ownedModal.classList.contains('hidden')) {
+              loadOwnedDepots();
+            }
+            
+            // Update allDepotsData to reflect the purchase
+            const depotIndex = allDepotsData.findIndex(d => d.lokasyon_id === lokasyonId);
+            if (depotIndex !== -1) {
+              allDepotsData[depotIndex].sahip_miyiz = 1;
+            }
           } else {
             // Show error message from server
             const errorMsg = data.message || data.error || 'Depo güncellenirken bir hata oluştu.';
@@ -2059,6 +2203,236 @@
           console.error('❌ Error marking depot as owned:', error);
           showToast('Depo güncellenirken bir hata oluştu: ' + (error.message || 'Bilinmeyen hata'), 'error');
         }
+      }
+      
+      // ======================
+      // Mevcut Depolarım Modal Functions
+      // ======================
+      
+      let ownedDepotsData = [];
+      
+      function openOwnedDepotsModal() {
+        const modal = document.getElementById('mevcut-depolarim-modal');
+        if (!modal) return;
+        
+        modal.classList.remove('hidden');
+        if (typeof lockBodyScroll === 'function') {
+          lockBodyScroll(true);
+        } else {
+          document.body.style.overflow = 'hidden';
+        }
+        
+        // Load owned depots
+        loadOwnedDepots();
+      }
+      
+      function closeOwnedDepotsModal() {
+        const modal = document.getElementById('mevcut-depolarim-modal');
+        if (modal) {
+          modal.classList.add('hidden');
+        }
+        if (typeof lockBodyScroll === 'function') {
+          lockBodyScroll(false);
+        } else {
+          document.body.style.overflow = '';
+        }
+      }
+      
+      async function loadOwnedDepots() {
+        const loadingEl = document.getElementById('mevcut-depolarim-loading');
+        const contentEl = document.getElementById('mevcut-depolarim-content');
+        const emptyEl = document.getElementById('mevcut-depolarim-empty');
+        const tbody = document.getElementById('mevcut-depolarim-table-body');
+        
+        if (!loadingEl || !contentEl || !emptyEl || !tbody) return;
+        
+        // Show loading (reset display style)
+        loadingEl.classList.remove('hidden');
+        loadingEl.style.display = '';
+        contentEl.classList.add('hidden');
+        emptyEl.classList.add('hidden');
+        
+        try {
+          // Fetch depots and locations (which includes used_db)
+          const [depotsResponse, locationsResponse] = await Promise.all([
+            fetch('/api/depolar-detay'),
+            fetch('/api/lokasyonlar')
+          ]);
+          
+          if (!depotsResponse.ok) {
+            throw new Error('Depo verileri alınamadı');
+          }
+          
+          const depotsData = await depotsResponse.json();
+          let allDepots = [];
+          
+          if (depotsData.success && depotsData.depolar) {
+            allDepots = depotsData.depolar;
+          } else if (Array.isArray(depotsData)) {
+            allDepots = depotsData;
+          }
+          
+          // Filter only purchased depots: tur='depo' AND sahip_miyiz=1
+          let ownedDepots = allDepots.filter(depo => 
+            depo.tur === 'depo' && depo.sahip_miyiz === 1
+          );
+          
+          // If locations endpoint is available, merge used_db data
+          if (locationsResponse.ok) {
+            try {
+              const locationsData = await locationsResponse.json();
+              if (locationsData.success && locationsData.data) {
+                const locationsMap = new Map();
+                locationsData.data.forEach(loc => {
+                  locationsMap.set(loc.lokasyon_id, loc);
+                });
+                
+                // Merge used_db and compute doluluk_yuzde client-side from used_db and capacity
+                ownedDepots = ownedDepots.map(depo => {
+                  // Use depot capacity: kapasite_db or kapasite
+                  const capDb = Number(depo.kapasite_db ?? depo.kapasite ?? 0);
+                  
+                  const location = locationsMap.get(depo.lokasyon_id);
+                  if (location) {
+                    // If location exists, use usedDb from location
+                    const usedDb = Number(location.used_db ?? 0);
+                    const doluluk = capDb > 0 ? (usedDb / capDb) * 100 : 0;
+                    return {
+                      ...depo,
+                      used_db: usedDb,
+                      doluluk_yuzde: doluluk
+                    };
+                  } else {
+                    // If location does not exist, compute fallback from depot's own used field
+                    const usedFallback = Number(depo.used_db ?? depo.kullanilan_db ?? depo.kullanilan ?? 0);
+                    const dolulukFallback = capDb > 0 ? (usedFallback / capDb) * 100 : 0;
+                    return {
+                      ...depo,
+                      used_db: usedFallback,
+                      doluluk_yuzde: dolulukFallback
+                    };
+                  }
+                });
+              }
+            } catch (locError) {
+              console.warn('⚠️ Could not load location occupancy data:', locError);
+            }
+          }
+          
+          ownedDepotsData = ownedDepots;
+          
+          // Hide loading completely (doesn't take up space)
+          loadingEl.classList.add('hidden');
+          loadingEl.style.display = 'none';
+          
+          // Show content area
+          contentEl.classList.remove('hidden');
+          
+          if (ownedDepotsData.length === 0) {
+            // Show empty state, hide table
+            emptyEl.classList.remove('hidden');
+            tbody.innerHTML = '';
+          } else {
+            // Hide empty state, render table
+            emptyEl.classList.add('hidden');
+            renderOwnedDepotsList(ownedDepotsData);
+          }
+        } catch (error) {
+          console.error('❌ Error loading owned depots:', error);
+          // Hide loading completely
+          loadingEl.classList.add('hidden');
+          loadingEl.style.display = 'none';
+          // Show content area with error
+          contentEl.classList.remove('hidden');
+          emptyEl.classList.remove('hidden');
+          emptyEl.innerHTML = '<p style="color: var(--color-danger);">Depo verileri yüklenirken bir hata oluştu.</p>';
+          tbody.innerHTML = '';
+        }
+      }
+      
+      function renderOwnedDepotsList(depots) {
+        const tbody = document.getElementById('mevcut-depolarim-table-body');
+        if (!tbody) return;
+        
+        if (depots.length === 0) {
+          tbody.innerHTML = '';
+          return;
+        }
+        
+        tbody.innerHTML = depots.map(depo => {
+          const distance = depo.distance_km !== null ? formatNumber(depo.distance_km) + ' km' : '-';
+          const rent = formatCurrency(depo.aylik_kira);
+          const capacity = formatNumber(depo.kapasite_db || depo.kullanilabilir_kapasite_db);
+          const area = depo.metrekare ? formatNumber(depo.metrekare) + ' m²' : '-';
+          const height = depo.yukseklik_m ? formatNumber(depo.yukseklik_m) + ' m' : '-';
+          const address = depo.adres || '-';
+          
+          // Use computed doluluk_yuzde from merged data (0-100 scale)
+          const dolulukYuzde = Number(depo.doluluk_yuzde ?? 0);
+          const usedDb = Number(depo.used_db ?? 0);
+          
+          // Display occupancy percentage with 1 decimal
+          let occupancyPercent = '-';
+          let occupancyClass = '';
+          let statusBadge = '';
+          
+          if (!isNaN(dolulukYuzde) && dolulukYuzde >= 0) {
+            occupancyPercent = dolulukYuzde.toFixed(1) + '%';
+            
+            // Status badge: Kritik if >= 80%, else Normal
+            // Use the doluluk_yuzde value (0-100 scale) for comparison
+            if (dolulukYuzde >= 80) {
+              statusBadge = '<span class="status-badge status-badge-critical">Kritik</span>';
+              occupancyClass = 'occupancy-critical';
+            } else {
+              statusBadge = '<span class="status-badge status-badge-normal">Normal</span>';
+              occupancyClass = 'occupancy-normal';
+            }
+          } else {
+            // Invalid or missing occupancy, show dash and Normal status
+            occupancyPercent = '-';
+            statusBadge = '<span class="status-badge status-badge-normal">Normal</span>';
+          }
+          
+          const usedDbFormatted = formatNumber(usedDb);
+          
+          // Photo thumbnail
+          const photos = depo.photos || [];
+          const firstPhoto = photos.length > 0 ? photos[0].foto_url : null;
+          const photoThumbnail = firstPhoto 
+            ? `<button type="button" class="depo-thumbnail-btn" data-lokasyon-id="${depo.lokasyon_id}" data-photos='${JSON.stringify(photos)}' aria-label="Fotoğrafları görüntüle"><img src="${firstPhoto}" alt="${depo.ad || 'Depo'}" class="depo-thumbnail" /></button>`
+            : '<div class="depo-thumbnail-placeholder">📷</div>';
+          
+          return `
+            <tr data-lokasyon-id="${depo.lokasyon_id}">
+              <td data-label="Fotoğraf" class="photo-cell">${photoThumbnail}</td>
+              <td data-label="Depo Adı"><strong>${depo.ad || 'Depo'}</strong></td>
+              <td data-label="Mesafe">${distance}</td>
+              <td data-label="Aylık Kira">${rent}</td>
+              <td data-label="Kapasite (DB)">${capacity}</td>
+              <td data-label="Kullanılan (DB)">${usedDbFormatted}</td>
+              <td data-label="Doluluk Oranı" class="${occupancyClass}">${occupancyPercent}</td>
+              <td data-label="Durum">${statusBadge}</td>
+              <td data-label="Metrekare">${area}</td>
+              <td data-label="Yükseklik">${height}</td>
+              <td data-label="Adres" class="address-cell">${address}</td>
+            </tr>
+          `;
+        }).join('');
+        
+        // Add click handlers to photo thumbnails
+        tbody.querySelectorAll('.depo-thumbnail-btn').forEach(btn => {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            const photos = JSON.parse(this.dataset.photos || '[]');
+            const lokasyonId = this.dataset.lokasyonId;
+            const depoName = this.closest('tr').querySelector('td[data-label="Depo Adı"] strong').textContent;
+            if (typeof openPhotoModal === 'function') {
+              openPhotoModal(photos, lokasyonId, depoName);
+            }
+          });
+        });
       }
       
       // Simple toast notification function
