@@ -393,6 +393,7 @@ router.get('/depolar-detay', async (req, res) => {
         }
         
         // Get all warehouses with all fields and photos (only active depots)
+        // Use LEFT JOIN to ensure depots without photos are still returned
         const depotsSql = `
             SELECT 
                 l.lokasyon_id,
@@ -417,6 +418,18 @@ router.get('/depolar-detay', async (req, res) => {
         `;
         
         const depotsRaw = await db.query(depotsSql);
+        console.log('[DEPOT LIST] GET /api/depolar-detay - Raw rows returned:', depotsRaw.length);
+        
+        // Log all depot IDs and aktif_mi values from raw results
+        const uniqueDepotIds = [...new Set(depotsRaw.map(r => r.lokasyon_id))];
+        console.log('[DEPOT LIST] Unique depot IDs in raw results:', uniqueDepotIds.join(', '));
+        const loggedIds = new Set();
+        depotsRaw.forEach(row => {
+            if (row.lokasyon_id && !loggedIds.has(row.lokasyon_id)) {
+                console.log(`[DEPOT LIST] Depot ID ${row.lokasyon_id}: aktif_mi=${row.aktif_mi}, ad=${row.ad}`);
+                loggedIds.add(row.lokasyon_id);
+            }
+        });
         
         // Group warehouses by lokasyon_id and collect photos
         const depotsMap = new Map();
@@ -453,6 +466,8 @@ router.get('/depolar-detay', async (req, res) => {
         
         // Convert map to array
         const depots = Array.from(depotsMap.values());
+        console.log('[DEPOT LIST] Unique depots after grouping:', depots.length);
+        console.log('[DEPOT LIST] Depot IDs:', depots.map(d => d.lokasyon_id).join(', '));
         
         // Calculate distance for each warehouse
         const depotsWithDistance = depots.map(depot => {
@@ -479,6 +494,9 @@ router.get('/depolar-detay', async (req, res) => {
             if (b.distance_km === null) return -1;
             return a.distance_km - b.distance_km;
         });
+        
+        console.log('[DEPOT LIST] Final response: Returning', depotsWithDistance.length, 'depots');
+        console.log('[DEPOT LIST] Final depot IDs:', depotsWithDistance.map(d => d.lokasyon_id).join(', '));
         
         return res.json({
             success: true,
@@ -593,8 +611,24 @@ router.post('/depolar', upload.array('photos', 10), async (req, res) => {
         const sanitizedMetrekare = req.body.metrekare ? parseTrNumber(req.body.metrekare) : null;
         const sanitizedYukseklik = req.body.yukseklik_m ? parseTrNumber(req.body.yukseklik_m) : null;
         const sanitizedKapasite = req.body.kapasite_db ? Math.floor(parseTrNumber(req.body.kapasite_db)) : null;
-        const sanitizedKullanilabilirOran = req.body.kullanilabilir_oran ? parseTrNumber(req.body.kullanilabilir_oran) : null;
         const sanitizedAylikKira = req.body.aylik_kira ? parseTrNumber(req.body.aylik_kira) : null;
+        
+        // Normalize kullanilabilir_oran: Accept "0.80", "0,80", "80", or "80%" and convert to fraction [0,1]
+        // Example: "80" or "80%" -> 0.80, "0,80" -> 0.80, "0.80" -> 0.80
+        let sanitizedKullanilabilirOran = null;
+        if (req.body.kullanilabilir_oran !== null && req.body.kullanilabilir_oran !== undefined) {
+            const raw = req.body.kullanilabilir_oran;
+            const s = String(raw ?? "").trim().replace("%", "").replace(",", ".");
+            let oran = Number(s);
+            if (!Number.isFinite(oran)) {
+                oran = 0.8; // Default to 80% if invalid
+            }
+            if (oran > 1) {
+                oran = oran / 100; // Convert percentage to fraction
+            }
+            oran = Math.max(0, Math.min(1, oran)); // Clamp to [0, 1]
+            sanitizedKullanilabilirOran = oran;
+        }
         
         // Ensure no NaN values - convert to null if invalid
         const depoData = {
@@ -606,10 +640,12 @@ router.post('/depolar', upload.array('photos', 10), async (req, res) => {
             metrekare: Number.isFinite(sanitizedMetrekare) && sanitizedMetrekare > 0 ? sanitizedMetrekare : null,
             yukseklik_m: Number.isFinite(sanitizedYukseklik) && sanitizedYukseklik > 0 ? sanitizedYukseklik : null,
             kapasite_db: Number.isFinite(sanitizedKapasite) && sanitizedKapasite > 0 ? sanitizedKapasite : null,
-            kullanilabilir_oran: Number.isFinite(sanitizedKullanilabilirOran) && sanitizedKullanilabilirOran >= 0 && sanitizedKullanilabilirOran <= 100 ? sanitizedKullanilabilirOran : null,
+            kullanilabilir_oran: sanitizedKullanilabilirOran, // Now normalized to [0,1] fraction
             aylik_kira: Number.isFinite(sanitizedAylikKira) && sanitizedAylikKira >= 0 ? sanitizedAylikKira : null,
             sahip_miyiz: 0 // Default: not owned
         };
+        
+        console.log('[DEPOT CREATE] Normalized kullanilabilir_oran:', sanitizedKullanilabilirOran, '(input was:', req.body.kullanilabilir_oran, ')');
         
         // Insert warehouse into database (excluding generated column)
         // Note: aktif_mi defaults to 1 if column exists
@@ -624,7 +660,7 @@ router.post('/depolar', upload.array('photos', 10), async (req, res) => {
                 tur, ad, adres, enlem, boylam, metrekare, yukseklik_m,
                 kapasite_db, kullanilabilir_oran,
                 aylik_kira, sahip_miyiz, aktif_mi
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         
         const insertParams = [
@@ -638,7 +674,8 @@ router.post('/depolar', upload.array('photos', 10), async (req, res) => {
             depoData.kapasite_db,
             depoData.kullanilabilir_oran,
             depoData.aylik_kira,
-            depoData.sahip_miyiz
+            depoData.sahip_miyiz,
+            1  // aktif_mi = 1 (active)
         ];
         
         // Debug: Log placeholder count vs params length
@@ -679,12 +716,17 @@ router.post('/depolar', upload.array('photos', 10), async (req, res) => {
         
         const insertResult = await db.query(insertSql, insertParams);
         // For INSERT queries, mysql2 returns an object with insertId property
-        const lokasyonId = insertResult.insertId;
+        // Handle both array and object return formats
+        const lokasyonId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId;
+        
+        console.log('[DEPOT CREATE] Insert result:', JSON.stringify(insertResult));
+        console.log('[DEPOT CREATE] Extracted lokasyonId:', lokasyonId);
         
         if (!lokasyonId) {
+            console.error('[DEPOT CREATE] ❌ No insertId returned from INSERT query');
             return res.status(500).json({
                 success: false,
-                error: 'Depo oluşturulurken bir hata oluştu.'
+                error: 'Depo oluşturulurken bir hata oluştu. insertId alınamadı.'
             });
         }
         
@@ -700,9 +742,12 @@ router.post('/depolar', upload.array('photos', 10), async (req, res) => {
                     VALUES (?, ?)
                 `;
                 
-                await db.query(photoSql, [lokasyonId, fotoUrl]);
+                const photoResult = await db.query(photoSql, [lokasyonId, fotoUrl]);
+                console.log('[DEPOT CREATE] Photo inserted with depo_id:', lokasyonId, 'photo_url:', fotoUrl);
                 photos.push({ foto_url: fotoUrl });
             }
+        } else {
+            console.log('[DEPOT CREATE] No photos uploaded for depot:', lokasyonId);
         }
         
         // SELECT the created row back to get the generated column value
@@ -720,18 +765,29 @@ router.post('/depolar', upload.array('photos', 10), async (req, res) => {
                 kullanilabilir_oran,
                 kullanilabilir_kapasite_db,
                 aylik_kira,
-                sahip_miyiz
+                sahip_miyiz,
+                aktif_mi
             FROM lokasyonlar
             WHERE lokasyon_id = ?
         `;
         
-        const [createdDepot] = await db.query(selectSql, [lokasyonId]);
+        const createdDepotResult = await db.query(selectSql, [lokasyonId]);
+        const createdDepot = Array.isArray(createdDepotResult) ? createdDepotResult[0] : createdDepotResult;
+        
+        console.log('[DEPOT CREATE] Retrieved created depot:', JSON.stringify(createdDepot));
+        console.log('[DEPOT CREATE] Depot aktif_mi value:', createdDepot?.aktif_mi);
         
         if (!createdDepot) {
+            console.error('[DEPOT CREATE] ❌ Created depot not found after INSERT');
             return res.status(500).json({
                 success: false,
                 error: 'Depo oluşturuldu ancak veriler alınamadı.'
             });
+        }
+        
+        // Verify aktif_mi is set correctly
+        if (createdDepot.aktif_mi !== 1) {
+            console.warn('[DEPOT CREATE] ⚠️ Warning: Created depot aktif_mi is not 1:', createdDepot.aktif_mi);
         }
         
         // Return created depot with photos and generated column

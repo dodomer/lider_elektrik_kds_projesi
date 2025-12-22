@@ -2804,20 +2804,15 @@ function initEventListeners() {
                     // Format critical depots count
                     const formattedKritik = data.kritikDepoSayisi.toString();
                     
-                    // Determine badge class and text based on decision
-                    const badgeClass = data.kdsKarari === 'DIKKAT' ? 'decision-warning' : 'decision-safe';
-                    const badgeText = data.kdsKarari === 'DIKKAT' ? 'Dikkat' : 'Uygun';
-                    const statusText = badgeText; // Show the same text in status field
-                    
                     // Update KPI cards
-                    updateKPICards(formattedCiro, formattedAdet, formattedKritik, statusText, badgeText, badgeClass);
+                    updateKPICards(formattedCiro, formattedAdet, formattedKritik);
                 } else {
                     throw new Error(data.error || 'Veri yüklenemedi');
                 }
             } catch (error) {
                 console.error('❌ Error loading KDS summary:', error);
                 // Show error state (keep "—" values)
-                updateKPICards('—', '—', '—', '—', 'Uygun');
+                updateKPICards('—', '—', '—');
             }
         });
     }
@@ -4531,7 +4526,7 @@ window.addEventListener('resize', handleResize);
  * @param {string} badgeText - Badge text ("Uygun" or "Dikkat")
  * @param {string} badgeClass - Badge CSS class ("decision-safe" or "decision-warning")
  */
-function updateKPICards(revenue, salesCount, criticalDepots, decisionStatus, badgeText, badgeClass = 'decision-safe') {
+function updateKPICards(revenue, salesCount, criticalDepots) {
     // Update revenue card
     const revenueEl = document.getElementById('kpi-monthly-revenue');
     if (revenueEl) {
@@ -4544,26 +4539,26 @@ function updateKPICards(revenue, salesCount, criticalDepots, decisionStatus, bad
         salesCountEl.textContent = salesCount;
     }
     
-    // Update critical warehouses card
+    // Update critical warehouses card with color-coding
     const criticalEl = document.getElementById('kpi-critical-warehouses');
-    if (criticalEl) {
+    const criticalCard = criticalEl?.closest('.card-kpi'); // Get the parent card element
+    if (criticalEl && criticalCard) {
         criticalEl.textContent = criticalDepots;
-    }
-    
-    // Update decision status and badge
-    const decisionStatusEl = document.getElementById('kpi-decision-status');
-    const decisionBadgeEl = document.getElementById('kpi-decision-badge');
-    
-    if (decisionStatusEl) {
-        decisionStatusEl.textContent = decisionStatus;
-    }
-    
-    if (decisionBadgeEl) {
-        decisionBadgeEl.textContent = badgeText;
-        // Remove existing badge classes
-        decisionBadgeEl.classList.remove('decision-safe', 'decision-warning', 'decision-danger');
-        // Add new badge class
-        decisionBadgeEl.classList.add(badgeClass);
+        
+        // Remove all state classes
+        criticalCard.classList.remove('kpi-state-green', 'kpi-state-yellow', 'kpi-state-red');
+        
+        // Parse the value (handle "—" or non-numeric)
+        const value = criticalDepots === '—' ? -1 : parseInt(criticalDepots, 10);
+        
+        // Apply state class based on value
+        if (value === 0) {
+            criticalCard.classList.add('kpi-state-green');
+        } else if (value === 1) {
+            criticalCard.classList.add('kpi-state-yellow');
+        } else if (value >= 2) {
+            criticalCard.classList.add('kpi-state-red');
+        }
     }
 }
 

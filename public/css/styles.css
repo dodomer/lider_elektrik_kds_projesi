@@ -3721,7 +3721,7 @@ input[readonly]:focus {
 /* KPI Row */
 .kpi-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: var(--space-lg);
     margin-bottom: var(--space-lg);
 }
@@ -3729,6 +3729,9 @@ input[readonly]:focus {
 .card-kpi {
     padding: var(--space-lg);
     text-align: center;
+    transition: background-color var(--transition-normal), 
+                border-color var(--transition-normal),
+                color var(--transition-normal);
 }
 
 .kpi-content {
@@ -3748,6 +3751,37 @@ input[readonly]:focus {
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1.2;
+}
+
+/* Color-coded states for Kritik Dolulukta Depo card */
+.card-kpi.kpi-state-green {
+    background-color: #E8F5E9;
+    border-left: 4px solid #10b981;
+}
+
+.card-kpi.kpi-state-green .kpi-label,
+.card-kpi.kpi-state-green .kpi-value {
+    color: #059669;
+}
+
+.card-kpi.kpi-state-yellow {
+    background-color: #FFF8E1;
+    border-left: 4px solid #f59e0b;
+}
+
+.card-kpi.kpi-state-yellow .kpi-label,
+.card-kpi.kpi-state-yellow .kpi-value {
+    color: #d97706;
+}
+
+.card-kpi.kpi-state-red {
+    background-color: #FDECEA;
+    border-left: 4px solid #ef4444;
+}
+
+.card-kpi.kpi-state-red .kpi-label,
+.card-kpi.kpi-state-red .kpi-value {
+    color: #dc2626;
 }
 
 .kpi-decision-wrapper {
