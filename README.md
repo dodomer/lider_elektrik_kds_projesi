@@ -10,15 +10,17 @@ Senaryolar:
 
 2- Stok Negatiflik Durumu: Stoğun negatif olması engellenmiştir.
 
-3- Geçmiş tarihli veriler korunur. Çünkü satışlar ve analizler geçmiş verilerdir. Bu veriler silinirse analiz anlamsızlaşacağı için bu verilerin silinmesi engellenmiştir. Ürün ve depoların silinmesi bile veri tabanındaki "aktif mi" sütunu sayesinde
-soft delete ile yapılmaktadır.
+3- Geçmiş tarihli veriler korunur. Çünkü satışlar ve analizler geçmiş verilerdir. Bu veriler silinirse analiz anlamsızlaşacağı için bu verilerin silinmesi engellenmiştir. Ürün ve depoların silinmesi bile veri tabanındaki "aktif mi" sütunu sayesinde soft delete ile yapılmaktadır.
 
 4- Satışlar sadece mağazadan olmaktadır. Depodan satış yapılmamaktadır.
 
 5- Sipariş sonrası eğer işlem başarılıysa mevcut stoktan verilen sipariş düşer.
 
+6- Ağırlık bazlı en uygun depo seçilmesi sağlanmıştır. Kişinin kendi ağırlık değerlerine göre kullanıcıya "En Uygun Depolar" listesi sunulmuştur.
+
+
 Kurulum Adımları: Öncelikle veri tabanının nasıl olacağı, neler gerektiğini yazdım. Ardından bir ER diyagramı şeklinde veri tabanını görselleştirmeye çalıştım. Veri tabanını kurduktan sonra depo yöneticisinin de isteklerini dinleyip
-kurulum aşamasına geçtim.
+kurulum aşamasına geçtim. Çevik metodoloji ile ilerlediğim için depo yöneticisi ile hep iletişim halindeydim ve her isteğini (özellikle enflasyon kısmını istemişti) siteye eklemeye çalıştım.
 
 NOT: Projeyi environment config kullanacak şekilde geliştirmiştim fakat güvenlik sebebiyle .env dosyasını GitHub’a eklemedim, bunun yerine sizin de dediğiniz gibi .env.example dosyasını GitHub'a yükledim.
 
